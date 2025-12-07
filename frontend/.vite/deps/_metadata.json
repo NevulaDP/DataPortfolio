@@ -1,0 +1,97 @@
+{
+  "hash": "5a4d30be",
+  "configHash": "afd69ef5",
+  "lockfileHash": "b2eac7fa",
+  "browserHash": "0cfd6fa2",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "cdb12bee",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "53291538",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "16500ce4",
+      "needsInterop": true
+    },
+    "@mui/material": {
+      "src": "../../node_modules/@mui/material/esm/index.js",
+      "file": "@mui_material.js",
+      "fileHash": "b370b3a4",
+      "needsInterop": false
+    },
+    "axios": {
+      "src": "../../node_modules/axios/index.js",
+      "file": "axios.js",
+      "fileHash": "6d31829a",
+      "needsInterop": false
+    },
+    "react-split": {
+      "src": "../../node_modules/react-split/dist/react-split.es.js",
+      "file": "react-split.js",
+      "fileHash": "549ad07c",
+      "needsInterop": false
+    },
+    "@monaco-editor/react": {
+      "src": "../../node_modules/@monaco-editor/react/dist/index.mjs",
+      "file": "@monaco-editor_react.js",
+      "fileHash": "5b764010",
+      "needsInterop": false
+    },
+    "@mui/icons-material/Send": {
+      "src": "../../node_modules/@mui/icons-material/esm/Send.js",
+      "file": "@mui_icons-material_Send.js",
+      "fileHash": "110e735e",
+      "needsInterop": false
+    },
+    "@mui/icons-material/PlayArrow": {
+      "src": "../../node_modules/@mui/icons-material/esm/PlayArrow.js",
+      "file": "@mui_icons-material_PlayArrow.js",
+      "fileHash": "8083184d",
+      "needsInterop": false
+    },
+    "react-markdown": {
+      "src": "../../node_modules/react-markdown/index.js",
+      "file": "react-markdown.js",
+      "fileHash": "87953964",
+      "needsInterop": false
+    },
+    "sql.js": {
+      "src": "../../node_modules/sql.js/dist/sql-wasm.js",
+      "file": "sql__js.js",
+      "fileHash": "37591443",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "chunk-3HME3SJ2": {
+      "file": "chunk-3HME3SJ2.js"
+    },
+    "chunk-C6WWHQR7": {
+      "file": "chunk-C6WWHQR7.js"
+    },
+    "chunk-BILUNKFB": {
+      "file": "chunk-BILUNKFB.js"
+    },
+    "chunk-L4PS4AXR": {
+      "file": "chunk-L4PS4AXR.js"
+    },
+    "chunk-FVMUUFPZ": {
+      "file": "chunk-FVMUUFPZ.js"
+    },
+    "chunk-GH6UE3LJ": {
+      "file": "chunk-GH6UE3LJ.js"
+    },
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
+    }
+  }
+}
