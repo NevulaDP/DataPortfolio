@@ -82,18 +82,52 @@ class LLMService:
             return "I'm having trouble connecting to my brain right now. Please try again later."
 
     def _mock_response(self, prompt: str) -> dict:
-        if "sector" in prompt.lower() or "schema" in prompt.lower():
-            return {
-                "title": "Mock Project: Sales Analysis",
-                "description": "Analyze the sales data for a retail company to identify trends and opportunities. This is a MOCK response.",
-                "tasks": ["Calculate total revenue", "Identify top selling products", "Analyze sales by region"],
-                "schema": [
-                    {"name": "transaction_id", "type": "string", "description": "Unique ID for transaction", "distribution_hint": "uuid"},
-                    {"name": "date", "type": "date", "description": "Date of transaction", "distribution_hint": "last_year"},
-                    {"name": "product_category", "type": "categorical", "description": "Category of product", "distribution_hint": "['Electronics', 'Clothing', 'Home']"},
-                    {"name": "amount", "type": "numeric", "description": "Transaction amount", "distribution_hint": "normal(100, 20)"}
+        return {
+            "title": "Mock Project: Sales Analysis (Recipe Mode)",
+            "description": "Analyze the sales data for a retail company. This is a MOCK response generated without an API key.",
+            "tasks": ["Calculate total revenue", "Identify top selling products", "Analyze sales by region"],
+            "recipe": {
+                "anchor_entity": {
+                    "name": "Product Category",
+                    "options": ["Electronics", "Clothing", "Home", "Books"],
+                    "weights": [0.4, 0.3, 0.2, 0.1]
+                },
+                "correlated_columns": [
+                    {
+                        "name": "Price",
+                        "type": "numeric",
+                        "rules": {
+                            "Electronics": {"min": 100, "max": 1000},
+                            "Clothing": {"min": 20, "max": 100},
+                            "Home": {"min": 50, "max": 300},
+                            "Books": {"min": 10, "max": 50},
+                            "default": {"min": 10, "max": 100}
+                        }
+                    },
+                    {
+                        "name": "Warranty Extended",
+                        "type": "boolean",
+                        "rules": {
+                            "Electronics": 0.3,
+                            "Clothing": 0.0,
+                            "Home": 0.1,
+                            "Books": 0.0,
+                            "default": 0.1
+                        }
+                    }
                 ],
-                "insights": ["Electronics have higher variance", "Sales peak in December"],
-                "data_issues": ["5% missing dates", "Duplicate transaction IDs"]
-            }
-        return {"error": "Mock response not implemented for this prompt"}
+                "faker_columns": [
+                    {"name": "Transaction ID", "faker_method": "uuid4"},
+                    {"name": "Customer Email", "faker_method": "email"},
+                    {"name": "Date", "faker_method": "date_this_year"}
+                ]
+            },
+            "display_schema": [
+                {"name": "Product Category", "type": "Categorical", "description": "Main product type"},
+                {"name": "Price", "type": "Numeric", "description": "Item price in USD"},
+                {"name": "Warranty Extended", "type": "Boolean", "description": "If warranty was purchased"},
+                {"name": "Transaction ID", "type": "String", "description": "Unique identifier"},
+                {"name": "Customer Email", "type": "String", "description": "Customer contact"},
+                {"name": "Date", "type": "Date", "description": "Transaction date"}
+            ]
+        }

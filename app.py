@@ -81,7 +81,13 @@ def generate_project():
                 st.error(definition["error"])
                 return
 
-            df = project_generator.generate_dataset(definition.get('schema', []), rows=500)
+            # Use the new 'recipe' key for generation
+            # Fallback to schema if recipe is missing (legacy safety, though we changed the prompt)
+            if 'recipe' in definition:
+                df = project_generator.generate_dataset(definition['recipe'], rows=500)
+            else:
+                st.error("Invalid recipe format received from AI.")
+                return
 
             st.session_state.project = {
                 "definition": definition,
@@ -94,6 +100,7 @@ def generate_project():
             }]
         except Exception as e:
             st.error(f"Error generating project: {e}")
+            traceback.print_exc()
 
 def run_sql(query, df):
     try:
@@ -194,7 +201,9 @@ def render_workspace():
                 st.write(f"{i+1}. {task}")
 
         with st.expander("Data Schema"):
-            for col in definition['schema']:
+            # Updated to support display_schema OR schema (legacy fallback)
+            schema = definition.get('display_schema', definition.get('schema', []))
+            for col in schema:
                 st.write(f"**{col['name']}** ({col['type']})")
 
         st.divider()
@@ -242,8 +251,8 @@ def render_workspace():
             response_dict_py = code_editor(
                 st.session_state.python_code,
                 lang="python",
-                height=500, # Reduced slightly to fit better, but still large
-                theme="dawn", # A cleaner light theme often preferred for data science (vs github)
+                height=600,
+                theme="dawn",
                 options={
                     "showLineNumbers": True,
                     "wrap": True,
@@ -298,7 +307,7 @@ def render_workspace():
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
                 lang="sql",
-                height=500,
+                height=600,
                 theme="dawn",
                 options={
                     "showLineNumbers": True,
