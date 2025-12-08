@@ -39,13 +39,14 @@ class LLMService:
                 return {"error": f"API Error: {str(e)}"}
             return self._mock_response(prompt)
 
-    def generate_text(self, prompt: str, api_key: str = None, code_context: dict = None, history: list = None) -> str:
+    def generate_text(self, prompt: str, api_key: str = None, project_context: dict = None, code_context: dict = None, history: list = None) -> str:
         """
         Generates text response from the LLM.
 
         Args:
             prompt (str): The user's current question/prompt.
             api_key (str): The API key to use.
+            project_context (dict): The project definition (title, description, tasks, schema).
             code_context (dict): The current state of the python/sql editors.
             history (list): List of message dictionaries [{'role': 'user'|'assistant', 'content': '...'}] from the session state.
         """
@@ -55,6 +56,25 @@ class LLMService:
 
         try:
             model = self._get_model(key_to_use)
+
+            # Construct project context string
+            project_str = ""
+            if project_context:
+                project_str = "\n\n--- Project Context ---\n"
+                project_str += f"Title: {project_context.get('title', 'N/A')}\n"
+                project_str += f"Scenario: {project_context.get('description', 'N/A')}\n"
+                if 'tasks' in project_context:
+                    project_str += "Tasks:\n"
+                    for i, task in enumerate(project_context['tasks']):
+                        project_str += f"{i+1}. {task}\n"
+
+                schema = project_context.get('display_schema') or project_context.get('schema')
+                if schema:
+                     project_str += "Schema:\n"
+                     for col in schema:
+                         project_str += f"- {col.get('name')} ({col.get('type')})\n"
+
+                project_str += "-----------------------\n"
 
             # Construct context string from code
             code_str = ""
@@ -95,7 +115,7 @@ class LLMService:
             4. Be encouraging and constructive.
             """
 
-            full_prompt = f"{system_instruction}\n{code_str}\n{history_str}\nUser Question: {prompt}"
+            full_prompt = f"{system_instruction}\n{project_str}\n{code_str}\n{history_str}\nUser Question: {prompt}"
 
             response = model.generate_content(full_prompt)
             return response.text

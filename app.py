@@ -247,12 +247,11 @@ def render_workspace():
             }
 
             # Generate response
-            context = f"Project: {definition['title']}. Scenario: {definition['description']}"
-
             # Use gemma-3-27b-it via LLMService
             response = llm_service.generate_text(
-                prompt=f"Project Context: {context}\n\nUser Question: {prompt}",
+                prompt=prompt,
                 api_key=st.session_state.api_key,
+                project_context=definition,
                 code_context=code_context,
                 history=st.session_state.messages[:-1]
             )
