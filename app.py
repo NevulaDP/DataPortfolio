@@ -30,19 +30,6 @@ if 'api_key' not in st.session_state:
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
 
-# --- Custom CSS for Layout ---
-st.markdown("""
-<style>
-    .reportview-container {
-        background: #f0f2f6;
-    }
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # --- Functions ---
 
 def generate_project():
