@@ -56,6 +56,12 @@ def generate_project():
                 st.session_state.sector_input,
                 st.session_state.api_key
             )
+
+            # Check for error in definition (e.g. 404 from LLM)
+            if "error" in definition:
+                st.error(definition["error"])
+                return
+
             df = project_generator.generate_dataset(definition.get('schema', []), rows=500)
 
             st.session_state.project = {
