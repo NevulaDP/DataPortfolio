@@ -25,7 +25,7 @@ if 'python_code' not in st.session_state:
 if 'sql_code' not in st.session_state:
     st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
 if 'api_key' not in st.session_state:
-    st.session_state.api_key = os.getenv("GEMINI_API_KEY")
+    st.session_state.api_key = os.getenv("GEMINI_API_KEY", "")
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -100,55 +100,20 @@ def render_sidebar():
         st.title("Settings")
 
         # API Key Input
-        api_key_input = st.text_input(
+        # We rely on key="api_key" to automatically sync with st.session_state.api_key
+        st.text_input(
             "Gemini API Key",
             type="password",
             help="Enter your Google Gemini API Key. It is used only for this session and not stored.",
-            value=st.session_state.api_key or ""
+            key="api_key"
         )
 
-        if api_key_input:
-            st.session_state.api_key = api_key_input
+        if st.session_state.api_key:
             st.success("API Key configured for this session.")
-        elif not st.session_state.api_key:
+        else:
             st.warning("No API Key set. Using Mock Mode.")
 
         st.divider()
-
-        if st.session_state.project:
-            definition = st.session_state.project['definition']
-            st.header("📋 Project Scenario")
-            st.subheader(definition['title'])
-            st.info(definition['description'])
-
-            with st.expander("Tasks", expanded=True):
-                for i, task in enumerate(definition['tasks']):
-                    st.write(f"{i+1}. {task}")
-
-            with st.expander("Data Schema"):
-                for col in definition['schema']:
-                    st.write(f"**{col['name']}** ({col['type']})")
-
-            st.divider()
-            st.header("💬 Mentor Chat")
-
-            # Chat History
-            chat_container = st.container(height=300)
-            for msg in st.session_state.messages:
-                chat_container.chat_message(msg["role"]).write(msg["content"])
-
-            # Chat Input
-            if prompt := st.chat_input("Ask for help..."):
-                st.session_state.messages.append({"role": "user", "content": prompt})
-                chat_container.chat_message("user").write(prompt)
-
-                # Generate response
-                context = f"Project: {definition['title']}. Scenario: {definition['description']}"
-                full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
-                response = llm_service.generate_text(full_prompt, st.session_state.api_key)
-
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                chat_container.chat_message("assistant").write(response)
 
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
@@ -168,72 +133,110 @@ def render_workspace():
     definition = project['definition']
     df = project['data']
 
-    st.title(f"Workspace: {definition['title']}")
+    # Split layout: Left (Context) vs Right (Work)
+    col_context, col_work = st.columns([1, 2], gap="large")
 
-    # Data Preview
-    with st.expander("Data Preview (First 5 rows)", expanded=False):
-        st.dataframe(df.head())
+    with col_context:
+        st.header("📋 Project Scenario")
+        st.subheader(definition['title'])
+        st.info(definition['description'])
 
-    # Editors
-    tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
+        with st.expander("Tasks", expanded=True):
+            for i, task in enumerate(definition['tasks']):
+                st.write(f"{i+1}. {task}")
 
-    with tab_python:
-        st.markdown("Use `df` to access the dataset.")
-        st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
+        with st.expander("Data Schema"):
+            for col in definition['schema']:
+                st.write(f"**{col['name']}** ({col['type']})")
 
-        # Python Editor
-        response_dict_py = code_editor(
-            st.session_state.python_code,
-            lang="python",
-            height=200,
-            theme="github",
-            buttons=[{
-                "name": "Run",
-                "feather": "Play",
-                "primary": True,
-                "hasText": True,
-                "alwaysOn": True,
-                "commands": ["submit"],
-                "style": {"bottom": "0.46rem", "right": "0.4rem"}
-            }]
-        )
+        st.divider()
+        st.header("💬 Mentor Chat")
 
-        if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
-            st.session_state.python_code = response_dict_py['text']
-            output, error = run_python(response_dict_py['text'], df)
-            if output:
-                st.text("Output:")
-                st.code(output)
-            if error:
-                st.error(f"Error: {error}")
+        # Chat History
+        chat_container = st.container(height=400)
+        for msg in st.session_state.messages:
+            chat_container.chat_message(msg["role"]).write(msg["content"])
 
-    with tab_sql:
-        st.markdown("Table name is `dataset`.")
+        # Chat Input
+        if prompt := st.chat_input("Ask for help..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            chat_container.chat_message("user").write(prompt)
 
-        # SQL Editor
-        response_dict_sql = code_editor(
-            st.session_state.sql_code,
-            lang="sql",
-            height=200,
-            theme="github",
-             buttons=[{
-                "name": "Run",
-                "feather": "Play",
-                "primary": True,
-                "hasText": True,
-                "alwaysOn": True,
-                "commands": ["submit"],
-                "style": {"bottom": "0.46rem", "right": "0.4rem"}
-            }]
-        )
+            # Generate response
+            context = f"Project: {definition['title']}. Scenario: {definition['description']}"
+            full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
+            response = llm_service.generate_text(full_prompt, st.session_state.api_key)
 
-        if response_dict_sql['type'] == "submit" and len(response_dict_sql['text']) != 0:
-            st.session_state.sql_code = response_dict_sql['text']
-            res, error = run_sql(response_dict_sql['text'], df)
-            if res is not None:
-                st.dataframe(res)
-            if error:
-                st.error(f"Error: {error}")
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            chat_container.chat_message("assistant").write(response)
+
+    with col_work:
+        st.title(f"Workspace: {definition['title']}")
+
+        # Data Preview
+        with st.expander("Data Preview (First 5 rows)", expanded=False):
+            st.dataframe(df.head())
+
+        # Editors
+        tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
+
+        with tab_python:
+            st.markdown("Use `df` to access the dataset.")
+            st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
+
+            # Python Editor
+            response_dict_py = code_editor(
+                st.session_state.python_code,
+                lang="python",
+                height=300,
+                theme="github",
+                buttons=[{
+                    "name": "Run",
+                    "feather": "Play",
+                    "primary": True,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["submit"],
+                    "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                }]
+            )
+
+            if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
+                st.session_state.python_code = response_dict_py['text']
+                output, error = run_python(response_dict_py['text'], df)
+                if output:
+                    st.text("Output:")
+                    st.code(output)
+                if error:
+                    st.error(f"Error: {error}")
+
+        with tab_sql:
+            st.markdown("Table name is `dataset`.")
+
+            # SQL Editor
+            response_dict_sql = code_editor(
+                st.session_state.sql_code,
+                lang="sql",
+                height=300,
+                theme="github",
+                 buttons=[{
+                    "name": "Run",
+                    "feather": "Play",
+                    "primary": True,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["submit"],
+                    "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                }]
+            )
+
+            if response_dict_sql['type'] == "submit" and len(response_dict_sql['text']) != 0:
+                st.session_state.sql_code = response_dict_sql['text']
+                res, error = run_sql(response_dict_sql['text'], df)
+                if res is not None:
+                    st.dataframe(res)
+                if error:
+                    st.error(f"Error: {error}")
 
 # --- Main App Logic ---
 
