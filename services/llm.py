@@ -12,7 +12,8 @@ class LLMService:
 
     def _get_model(self, api_key: str):
         genai.configure(api_key=api_key)
-        return genai.GenerativeModel('gemini-2.5-flash')
+        # Using gemma-3-27b-it as explicitly requested
+        return genai.GenerativeModel('gemma-3-27b-it')
 
     def list_available_models(self, api_key: str):
         try:

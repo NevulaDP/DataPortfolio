@@ -246,52 +246,15 @@ def render_workspace():
                 "sql": st.session_state.sql_code
             }
 
-            # Pass existing history to the LLM (excluding the very first message which is usually the greeting,
-            # but providing the whole list is fine as long as the prompt handles it.
-            # We filter for the last N messages inside generate_text)
-
             # Generate response
             context = f"Project: {definition['title']}. Scenario: {definition['description']}"
-            full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
 
-            response = llm_service.generate_text(
-                prompt=full_prompt, # Note: We are passing a composed prompt here, but the LLMService now builds a NEW prompt.
-                # Wait, we need to be careful not to double-prompt.
-                # generate_text takes 'prompt' as the user question.
-                # Let's adjust the call. We should pass the *user's prompt* as the 'prompt' arg,
-                # and let the service build the system context.
-                # However, the current app logic constructs 'full_prompt' with context.
-                # Let's clean this up. We should pass just the user prompt and let the service handle context/history?
-                # No, the service logic I wrote takes 'prompt' and appends it to 'system_instruction'.
-                # So I should pass the *raw* user prompt, and let the service see history.
-                # BUT I also need to pass the project context (title/desc) to the service.
-                # The service method signature is: generate_text(self, prompt, api_key, code_context, history)
-                # It does NOT take 'project_context'.
-                # I should probably update the service to accept 'system_context' or just prepend it to the prompt myself.
-                # Let's stick to the current plan:
-                # The 'prompt' argument to generate_text is what gets appended at the end.
-                # I should prepend the project context to the prompt I send, OR update the service.
-                # Updating the service is cleaner but I just wrote it.
-                # Let's just prepend project info to the prompt string I send to `generate_text`.
-
-                api_key=st.session_state.api_key,
-                code_context=code_context,
-                history=st.session_state.messages
-            )
-            # Re-read: generate_text builds `full_prompt = f"{system_instruction}\n{code_str}\n{history_str}\nUser Question: {prompt}"`
-            # So if I pass `full_prompt` (which includes "You are a senior data analyst..."), it gets duplicated instructions.
-            # I should pass: f"Project Context: {context}\n\nUser Question: {prompt}"
-
-            # Refined call:
+            # Use gemma-3-27b-it via LLMService
             response = llm_service.generate_text(
                 prompt=f"Project Context: {context}\n\nUser Question: {prompt}",
                 api_key=st.session_state.api_key,
                 code_context=code_context,
-                history=st.session_state.messages[:-1] # Exclude the just-added user message to avoid duplication in history string?
-                # Actually, the service iterates `history`. If I just added the user message to state, it's in history.
-                # If I pass the whole history, the service will print "User: <prompt>" in the history block AND "User Question: <prompt>" at the end.
-                # That's redundant.
-                # Better to pass history excluding the current prompt.
+                history=st.session_state.messages[:-1]
             )
 
             st.session_state.messages.append({"role": "assistant", "content": response})
