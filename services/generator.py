@@ -2,12 +2,13 @@ import pandas as pd
 import numpy as np
 from faker import Faker
 import random
-from .llm import llm_service
+from .llm import LLMService
 
 fake = Faker()
+llm_service = LLMService()
 
 class ProjectGenerator:
-    def generate_project_definition(self, sector: str):
+    def generate_project_definition(self, sector: str, api_key: str = None):
         prompt = f"""
         Generate a data analysis project scenario for a Junior Data Analyst in the '{sector}' sector.
 
@@ -28,7 +29,7 @@ class ProjectGenerator:
             "data_issues": ["List of 2-3 data quality issues to introduce (e.g., 'nulls in column X', 'duplicates', 'outliers')"]
         }}
         """
-        return llm_service.generate_json(prompt)
+        return llm_service.generate_json(prompt, api_key)
 
     def generate_dataset(self, schema: list, rows: int = 1000) -> pd.DataFrame:
         data = {}

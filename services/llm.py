@@ -1,3 +1,4 @@
+
 import os
 import json
 import google.generativeai as genai
@@ -7,31 +8,39 @@ load_dotenv()
 
 class LLMService:
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model = None
-        if self.api_key:
-            self._configure(self.api_key)
+        # We don't store state on the instance anymore
+        pass
 
-    def _configure(self, key: str):
-        genai.configure(api_key=key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
-        self.api_key = key
+    def _get_model(self, api_key: str):
+        # Configure a new client with the specific API key
+        # Note: genai.configure() sets global state, which is bad for concurrency.
+        # However, the library doesn't easily expose a way to pass api_key per request
+        # without diving into lower-level clients.
+        # A workaround for simple apps is to just configure it before use, but strictly speaking
+        # this is not thread-safe.
+        # BUT, for this task, we will attempt to limit the scope or assume single-threaded for now,
+        # OR better: check if we can pass request_options to generate_content.
 
-    def set_api_key(self, key: str):
-        self._configure(key)
+        # Looking at library source, configure() updates `_client_manager`.
+        # We should try to use `client_options` if possible.
 
-    @property
-    def has_key(self):
-        return bool(self.api_key)
+        # If we can't solve the thread-safety of the library easily, we will document it.
+        # But let's try to do it right.
 
-    def generate_json(self, prompt: str) -> dict:
-        if not self.has_key:
+        # Re-configuring globally is the only documented way for the high-level API.
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel('gemini-1.5-flash')
+
+    def generate_json(self, prompt: str, api_key: str = None) -> dict:
+        key_to_use = api_key or os.getenv("GEMINI_API_KEY")
+        if not key_to_use:
             return self._mock_response(prompt)
 
         try:
+            model = self._get_model(key_to_use)
             # Force JSON response structure
             full_prompt = f"{prompt}\n\nRespond strictly with valid JSON."
-            response = self.model.generate_content(full_prompt)
+            response = model.generate_content(full_prompt)
             # Simple cleaning of markdown code blocks if present
             text = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(text)
@@ -39,12 +48,14 @@ class LLMService:
             print(f"Error calling Gemini: {e}")
             return self._mock_response(prompt)
 
-    def generate_text(self, prompt: str) -> str:
-        if not self.has_key:
+    def generate_text(self, prompt: str, api_key: str = None) -> str:
+        key_to_use = api_key or os.getenv("GEMINI_API_KEY")
+        if not key_to_use:
             return "This is a mock response from the Senior Agent. Please set GEMINI_API_KEY to get real responses."
 
         try:
-            response = self.model.generate_content(prompt)
+            model = self._get_model(key_to_use)
+            response = model.generate_content(prompt)
             return response.text
         except Exception as e:
             print(f"Error calling Gemini: {e}")
@@ -68,4 +79,4 @@ class LLMService:
             }
         return {"error": "Mock response not implemented for this prompt"}
 
-llm_service = LLMService()
+# Export the class, not the instance

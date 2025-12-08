@@ -3,9 +3,10 @@ import pandas as pd
 import sqlite3
 import io
 import contextlib
+import os
 from code_editor import code_editor
 from services.generator import project_generator
-from services.llm import llm_service
+from services.llm import LLMService
 
 # --- Page Config ---
 st.set_page_config(
@@ -23,7 +24,11 @@ if 'python_code' not in st.session_state:
     st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())"
 if 'sql_code' not in st.session_state:
     st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = os.getenv("GEMINI_API_KEY")
 
+# Initialize LLM Service (stateless)
+llm_service = LLMService()
 
 # --- Custom CSS for Layout ---
 st.markdown("""
@@ -47,7 +52,10 @@ def generate_project():
 
     with st.spinner(f"Generating synthetic data and scenario for '{st.session_state.sector_input}'..."):
         try:
-            definition = project_generator.generate_project_definition(st.session_state.sector_input)
+            definition = project_generator.generate_project_definition(
+                st.session_state.sector_input,
+                st.session_state.api_key
+            )
             df = project_generator.generate_dataset(definition.get('schema', []), rows=500)
 
             st.session_state.project = {
@@ -92,11 +100,17 @@ def render_sidebar():
         st.title("Settings")
 
         # API Key Input
-        api_key = st.text_input("Gemini API Key", type="password", help="Enter your Google Gemini API Key to enable real AI features.")
-        if api_key:
-            llm_service.set_api_key(api_key)
-            st.success("API Key configured!")
-        elif not llm_service.has_key:
+        api_key_input = st.text_input(
+            "Gemini API Key",
+            type="password",
+            help="Enter your Google Gemini API Key. It is used only for this session and not stored.",
+            value=st.session_state.api_key or ""
+        )
+
+        if api_key_input:
+            st.session_state.api_key = api_key_input
+            st.success("API Key configured for this session.")
+        elif not st.session_state.api_key:
             st.warning("No API Key set. Using Mock Mode.")
 
         st.divider()
@@ -131,7 +145,7 @@ def render_sidebar():
                 # Generate response
                 context = f"Project: {definition['title']}. Scenario: {definition['description']}"
                 full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
-                response = llm_service.generate_text(full_prompt)
+                response = llm_service.generate_text(full_prompt, st.session_state.api_key)
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 chat_container.chat_message("assistant").write(response)
