@@ -5,3 +5,5 @@ google-generativeai
 python-dotenv
 numpy
 streamlit-code-editor
+matplotlib
+seaborn

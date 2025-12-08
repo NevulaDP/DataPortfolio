@@ -1,9 +1,13 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import sqlite3
 import io
 import contextlib
 import os
+import traceback
+import matplotlib.pyplot as plt
+import seaborn as sns
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -29,6 +33,29 @@ if 'api_key' not in st.session_state:
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
+
+# --- Custom CSS for Layout ---
+st.markdown("""
+<style>
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    .console-output {
+        font-family: 'Courier New', Courier, monospace;
+        background-color: #0e1117;
+        color: #fafafa;
+        padding: 10px;
+        border-radius: 5px;
+        white-space: pre-wrap;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .console-error {
+        color: #ff4b4b;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # --- Functions ---
 
@@ -76,15 +103,34 @@ def run_python(code, df):
     # Capture stdout
     output_buffer = io.StringIO()
 
-    # Context for execution
-    local_scope = {"df": df, "pd": pd}
+    # Context for execution: Provide pandas, numpy, seaborn, matplotlib, etc.
+    # We also provide 'st' (Streamlit) so users can use st.write, st.pyplot explicitly if they want.
+    local_scope = {
+        "df": df,
+        "pd": pd,
+        "np": np, # Explicitly provide numpy
+        "plt": plt,
+        "sns": sns,
+        "st": st
+    }
+
+    figures = []
+    error_message = None
 
     try:
         with contextlib.redirect_stdout(output_buffer):
             exec(code, {}, local_scope)
-        return output_buffer.getvalue(), None
-    except Exception as e:
-        return output_buffer.getvalue(), str(e)
+
+        # Check for open figures
+        if plt.get_fignums():
+            fignums = plt.get_fignums()
+            for i in fignums:
+                figures.append(plt.figure(i))
+
+    except Exception:
+        error_message = traceback.format_exc()
+
+    return output_buffer.getvalue(), error_message, figures
 
 # --- UI Components ---
 
@@ -93,7 +139,6 @@ def render_sidebar():
         st.title("Settings")
 
         # API Key Input
-        # We rely on key="api_key" to automatically sync with st.session_state.api_key
         st.text_input(
             "Gemini API Key",
             type="password",
@@ -174,15 +219,21 @@ def render_workspace():
         tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
 
         with tab_python:
-            st.markdown("Use `df` to access the dataset.")
+            st.markdown("Use `df` to access the dataset. Libraries `pd`, `np`, `plt` (matplotlib), `sns` (seaborn) are available.")
             st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
 
-            # Python Editor
+            # Python Editor with advanced options
             response_dict_py = code_editor(
                 st.session_state.python_code,
                 lang="python",
-                height=300,
+                height=400,
                 theme="github",
+                options={
+                    "showLineNumbers": True,
+                    "wrap": True,
+                    "autoScrollEditorIntoView": True,
+                    "fontSize": 14,
+                },
                 buttons=[{
                     "name": "Run",
                     "feather": "Play",
@@ -196,12 +247,26 @@ def render_workspace():
 
             if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
                 st.session_state.python_code = response_dict_py['text']
-                output, error = run_python(response_dict_py['text'], df)
+                output, error, figs = run_python(response_dict_py['text'], df)
+
+                # Console Output
+                st.markdown("**Console Output:**")
                 if output:
-                    st.text("Output:")
-                    st.code(output)
+                    st.markdown(f'<div class="console-output">{output}</div>', unsafe_allow_html=True)
+                elif not error:
+                     st.markdown(f'<div class="console-output" style="color: #888;">No output</div>', unsafe_allow_html=True)
+
+                # Error Output
                 if error:
-                    st.error(f"Error: {error}")
+                    st.markdown("**Error:**")
+                    st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
+
+                # Plots
+                if figs:
+                    st.markdown("**Plots:**")
+                    for fig in figs:
+                        st.pyplot(fig)
+                        plt.close(fig) # Cleanup
 
         with tab_sql:
             st.markdown("Table name is `dataset`.")
@@ -210,8 +275,13 @@ def render_workspace():
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
                 lang="sql",
-                height=300,
+                height=400,
                 theme="github",
+                options={
+                    "showLineNumbers": True,
+                    "wrap": True,
+                    "fontSize": 14,
+                },
                  buttons=[{
                     "name": "Run",
                     "feather": "Play",
@@ -226,10 +296,12 @@ def render_workspace():
             if response_dict_sql['type'] == "submit" and len(response_dict_sql['text']) != 0:
                 st.session_state.sql_code = response_dict_sql['text']
                 res, error = run_sql(response_dict_sql['text'], df)
+
+                st.markdown("**Results:**")
                 if res is not None:
                     st.dataframe(res)
                 if error:
-                    st.error(f"Error: {error}")
+                    st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
 
 # --- Main App Logic ---
 
