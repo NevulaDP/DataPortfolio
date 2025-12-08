@@ -14,8 +14,8 @@ class LLMService:
     def _get_model(self, api_key: str):
         # Re-configuring globally is the only documented way for the high-level API.
         genai.configure(api_key=api_key)
-        # Updated to the latest stable model found in docs
-        return genai.GenerativeModel('gemini-2.5-flash')
+        # Using Gemini 1.5 Pro as the "advanced" model (more capable than 1.5 Flash)
+        return genai.GenerativeModel('gemini-1.5-pro')
 
     def list_available_models(self, api_key: str):
         try:
@@ -41,7 +41,7 @@ class LLMService:
             print(f"Error calling Gemini: {e}")
             if "404" in str(e) or "not found" in str(e).lower():
                 models = self.list_available_models(key_to_use)
-                return {"error": f"Model 'gemini-2.5-flash' not found. Your key has access to: {', '.join(models)}"}
+                return {"error": f"Model 'gemini-1.5-pro' not found. Your key has access to: {', '.join(models)}"}
             return self._mock_response(prompt)
 
     def generate_text(self, prompt: str, api_key: str = None) -> str:
@@ -51,7 +51,19 @@ class LLMService:
 
         try:
             model = self._get_model(key_to_use)
-            response = model.generate_content(prompt)
+            # Add system instruction to prompt for Socratic guidance
+            system_instruction = """
+            You are a Senior Data Analyst mentor guiding a Junior Analyst.
+            Do NOT provide direct code solutions or SQL queries immediately.
+            Instead, guide the user on how to think about the problem.
+            Ask leading questions, suggest concepts (e.g., 'Have you thought about grouping by...?'),
+            and help them breakdown the task.
+            Only provide code snippets if the user is stuck after multiple attempts or explicitly asks for syntax help.
+            Be encouraging and constructive.
+            """
+            full_prompt = f"{system_instruction}\n\n{prompt}"
+
+            response = model.generate_content(full_prompt)
             return response.text
         except Exception as e:
             print(f"Error calling Gemini: {e}")
