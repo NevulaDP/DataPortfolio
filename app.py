@@ -219,14 +219,14 @@ def render_workspace():
         tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
 
         with tab_python:
-            st.markdown("Use `df` to access the dataset. Libraries `pd`, `np`, `plt` (matplotlib), `sns` (seaborn) are available.")
+            st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`. Example: `plt.plot(df['col'])`.")
             st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
 
             # Python Editor with advanced options
             response_dict_py = code_editor(
                 st.session_state.python_code,
                 lang="python",
-                height=400,
+                height=600,
                 theme="github",
                 options={
                     "showLineNumbers": True,
@@ -275,7 +275,7 @@ def render_workspace():
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
                 lang="sql",
-                height=400,
+                height=600,
                 theme="github",
                 options={
                     "showLineNumbers": True,

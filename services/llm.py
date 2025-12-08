@@ -8,13 +8,10 @@ load_dotenv()
 
 class LLMService:
     def __init__(self):
-        # We don't store state on the instance anymore
         pass
 
     def _get_model(self, api_key: str):
-        # Re-configuring globally is the only documented way for the high-level API.
         genai.configure(api_key=api_key)
-        # Using Gemini 2.5 Flash as requested and confirmed available
         return genai.GenerativeModel('gemini-2.5-flash')
 
     def list_available_models(self, api_key: str):
@@ -31,17 +28,14 @@ class LLMService:
 
         try:
             model = self._get_model(key_to_use)
-            # Force JSON response structure
             full_prompt = f"{prompt}\n\nRespond strictly with valid JSON."
             response = model.generate_content(full_prompt)
-            # Simple cleaning of markdown code blocks if present
             text = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(text)
         except Exception as e:
-            print(f"Error calling Gemini: {e}")
-            if "404" in str(e) or "not found" in str(e).lower():
-                models = self.list_available_models(key_to_use)
-                return {"error": f"Model 'gemini-2.5-flash' not found. Your key has access to: {', '.join(models)}"}
+            # If an API key was provided, we want to see the REAL error, not the mock.
+            if key_to_use:
+                return {"error": f"API Error: {str(e)}"}
             return self._mock_response(prompt)
 
     def generate_text(self, prompt: str, api_key: str = None) -> str:
@@ -62,18 +56,14 @@ class LLMService:
             Be encouraging and constructive.
             """
             full_prompt = f"{system_instruction}\n\n{prompt}"
-
             response = model.generate_content(full_prompt)
             return response.text
         except Exception as e:
-            print(f"Error calling Gemini: {e}")
-            if "404" in str(e) or "not found" in str(e).lower():
-                models = self.list_available_models(key_to_use)
-                return f"Error: Model not found. Your key has access to: {', '.join(models)}"
+            if key_to_use:
+                return f"Error connecting to AI Mentor: {str(e)}"
             return "I'm having trouble connecting to my brain right now. Please try again later."
 
     def _mock_response(self, prompt: str) -> dict:
-        # Simple mock based on keywords in prompt
         if "sector" in prompt.lower() or "schema" in prompt.lower():
             return {
                 "title": "Mock Project: Sales Analysis",
