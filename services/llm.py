@@ -38,7 +38,16 @@ class LLMService:
                 return {"error": f"API Error: {str(e)}"}
             return self._mock_response(prompt)
 
-    def generate_text(self, prompt: str, api_key: str = None, code_context: dict = None) -> str:
+    def generate_text(self, prompt: str, api_key: str = None, code_context: dict = None, history: list = None) -> str:
+        """
+        Generates text response from the LLM.
+
+        Args:
+            prompt (str): The user's current question/prompt.
+            api_key (str): The API key to use.
+            code_context (dict): The current state of the python/sql editors.
+            history (list): List of message dictionaries [{'role': 'user'|'assistant', 'content': '...'}] from the session state.
+        """
         key_to_use = api_key or os.getenv("GEMINI_API_KEY")
         if not key_to_use:
             return "This is a mock response from the Senior Agent. Please set GEMINI_API_KEY to get real responses."
@@ -46,7 +55,7 @@ class LLMService:
         try:
             model = self._get_model(key_to_use)
 
-            # Construct context string
+            # Construct context string from code
             code_str = ""
             if code_context:
                 code_str = "\n\n--- User's Current Code ---\n"
@@ -56,10 +65,22 @@ class LLMService:
                     code_str += f"SQL IDE:\n{code_context['sql']}\n"
                 code_str += "---------------------------\n"
 
+            # Construct conversation history string
+            history_str = ""
+            if history:
+                history_str = "\n\n--- Conversation History ---\n"
+                # Limit history to last 10 messages to prevent token overflow
+                recent_history = history[-10:]
+                for msg in recent_history:
+                    role = "User" if msg['role'] == 'user' else "Mentor"
+                    content = msg['content']
+                    history_str += f"{role}: {content}\n"
+                history_str += "----------------------------\n"
+
             # Add system instruction to prompt for Socratic guidance with code awareness
             system_instruction = """
             You are a Senior Data Analyst mentor guiding a Junior Analyst.
-            You have access to the code they are currently writing in the IDE (if any).
+            You have access to the code they are currently writing in the IDE (if any) and the recent conversation history.
 
             Guidelines:
             1. If the user asks a direct question like "Will this code work?" or "What is wrong?", analyze the provided code context.
@@ -72,7 +93,8 @@ class LLMService:
                - If they are clearly stuck after trying, you can provide a small snippet or corrected syntax, but avoid writing the whole script if possible.
             4. Be encouraging and constructive.
             """
-            full_prompt = f"{system_instruction}\n{code_str}\nUser Question: {prompt}"
+
+            full_prompt = f"{system_instruction}\n{code_str}\n{history_str}\nUser Question: {prompt}"
 
             response = model.generate_content(full_prompt)
             return response.text

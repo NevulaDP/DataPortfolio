@@ -61,7 +61,7 @@ class ProjectGenerator:
         """
         return llm_service.generate_json(prompt, api_key)
 
-    def generate_dataset(self, recipe: dict, rows: int = 1000) -> pd.DataFrame:
+    def generate_dataset(self, recipe: dict, rows: int = 10000) -> pd.DataFrame:
         data = {}
 
         # 1. Generate Anchor Column
@@ -71,7 +71,6 @@ class ProjectGenerator:
         weights = anchor['weights']
 
         # Normalize weights if needed
-        # Handle simple list of floats
         try:
             weights = [float(w) for w in weights]
             total_weight = sum(weights)
@@ -90,28 +89,28 @@ class ProjectGenerator:
             rules = col['rules']
 
             values = []
+            # Optimization: Generate all random numbers at once per anchor group instead of row-by-row
+            # But strictly following recipe map:
+            # We can use map/apply for speed, but let's stick to simple logic for correctness first.
+            # To optimize for 10k rows:
             for i in range(rows):
                 anchor_val = data[anchor_name][i]
                 rule = rules.get(anchor_val, rules.get('default'))
 
                 if rule is None:
-                    # Fallback if LLM missed a rule
                     if col_type == 'numeric':
                         val = np.random.randint(0, 100)
                     else:
                         val = random.choice([True, False])
                 else:
                     if col_type == 'numeric':
-                        # Expecting min/max dict
                         min_v = rule.get('min', 0)
                         max_v = rule.get('max', 100)
-                        # Decide if float or int based on range or random
                         if isinstance(min_v, float) or isinstance(max_v, float):
                             val = np.random.uniform(min_v, max_v)
                         else:
                             val = np.random.randint(min_v, max_v + 1)
                     elif col_type == 'boolean':
-                        # Expecting probability float
                         prob = rule if isinstance(rule, (int, float)) else 0.5
                         val = np.random.random() < prob
                     else:
@@ -126,21 +125,17 @@ class ProjectGenerator:
             method = col['faker_method']
 
             if hasattr(fake, method):
-                # Generate list
                 data[col_name] = [getattr(fake, method)() for _ in range(rows)]
             else:
-                # Fallback
                 data[col_name] = [fake.word() for _ in range(rows)]
 
         df = pd.DataFrame(data)
 
         # 4. Inject Chaos
-        # Construct a simple type map for the chaos toolkit
         col_types = {anchor_name: 'categorical'}
         for col in recipe.get('correlated_columns', []):
             col_types[col['name']] = col['type']
         for col in recipe.get('faker_columns', []):
-            # Infer basic type from method name
             method = col['faker_method']
             if 'date' in method:
                 col_types[col['name']] = 'date'

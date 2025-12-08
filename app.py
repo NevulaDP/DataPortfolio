@@ -55,9 +55,27 @@ st.markdown("""
     .console-error {
         color: #ff4b4b;
     }
-    /* Attempt to fix dropdown cropping by ensuring high z-index for ace autocomplete */
-    .ace_editor.ace_autocomplete {
-        z-index: 10000 !important;
+    /* Fix for dropdown cropping: set overflow visible on Ace containers */
+    .ace_editor, .ace_editor * {
+        overflow: visible !important;
+    }
+    .ace_autocomplete {
+        z-index: 99999 !important;
+    }
+    /* Better styling for scenario box */
+    .scenario-box {
+        background-color: #1e1e1e;
+        color: #e0e0e0;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid #4CAF50;
+        margin-bottom: 20px;
+    }
+    .scenario-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #4CAF50;
+        margin-bottom: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -82,9 +100,9 @@ def generate_project():
                 return
 
             # Use the new 'recipe' key for generation
-            # Fallback to schema if recipe is missing (legacy safety, though we changed the prompt)
+            # Pass explicit rows=10000 per requirement
             if 'recipe' in definition:
-                df = project_generator.generate_dataset(definition['recipe'], rows=500)
+                df = project_generator.generate_dataset(definition['recipe'], rows=10000)
             else:
                 st.error("Invalid recipe format received from AI.")
                 return
@@ -192,16 +210,19 @@ def render_workspace():
     col_context, col_work = st.columns([1, 2], gap="large")
 
     with col_context:
-        st.header("📋 Project Scenario")
-        st.subheader(definition['title'])
-        st.info(definition['description'])
+        # Improved Scenario UI
+        st.markdown(f"""
+        <div class="scenario-box">
+            <div class="scenario-title">{definition['title']}</div>
+            <p>{definition['description']}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
         with st.expander("Tasks", expanded=True):
             for i, task in enumerate(definition['tasks']):
                 st.write(f"{i+1}. {task}")
 
         with st.expander("Data Schema"):
-            # Updated to support display_schema OR schema (legacy fallback)
             schema = definition.get('display_schema', definition.get('schema', []))
             for col in schema:
                 st.write(f"**{col['name']}** ({col['type']})")
@@ -225,16 +246,59 @@ def render_workspace():
                 "sql": st.session_state.sql_code
             }
 
+            # Pass existing history to the LLM (excluding the very first message which is usually the greeting,
+            # but providing the whole list is fine as long as the prompt handles it.
+            # We filter for the last N messages inside generate_text)
+
             # Generate response
             context = f"Project: {definition['title']}. Scenario: {definition['description']}"
             full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
-            response = llm_service.generate_text(full_prompt, st.session_state.api_key, code_context)
+
+            response = llm_service.generate_text(
+                prompt=full_prompt, # Note: We are passing a composed prompt here, but the LLMService now builds a NEW prompt.
+                # Wait, we need to be careful not to double-prompt.
+                # generate_text takes 'prompt' as the user question.
+                # Let's adjust the call. We should pass the *user's prompt* as the 'prompt' arg,
+                # and let the service build the system context.
+                # However, the current app logic constructs 'full_prompt' with context.
+                # Let's clean this up. We should pass just the user prompt and let the service handle context/history?
+                # No, the service logic I wrote takes 'prompt' and appends it to 'system_instruction'.
+                # So I should pass the *raw* user prompt, and let the service see history.
+                # BUT I also need to pass the project context (title/desc) to the service.
+                # The service method signature is: generate_text(self, prompt, api_key, code_context, history)
+                # It does NOT take 'project_context'.
+                # I should probably update the service to accept 'system_context' or just prepend it to the prompt myself.
+                # Let's stick to the current plan:
+                # The 'prompt' argument to generate_text is what gets appended at the end.
+                # I should prepend the project context to the prompt I send, OR update the service.
+                # Updating the service is cleaner but I just wrote it.
+                # Let's just prepend project info to the prompt string I send to `generate_text`.
+
+                api_key=st.session_state.api_key,
+                code_context=code_context,
+                history=st.session_state.messages
+            )
+            # Re-read: generate_text builds `full_prompt = f"{system_instruction}\n{code_str}\n{history_str}\nUser Question: {prompt}"`
+            # So if I pass `full_prompt` (which includes "You are a senior data analyst..."), it gets duplicated instructions.
+            # I should pass: f"Project Context: {context}\n\nUser Question: {prompt}"
+
+            # Refined call:
+            response = llm_service.generate_text(
+                prompt=f"Project Context: {context}\n\nUser Question: {prompt}",
+                api_key=st.session_state.api_key,
+                code_context=code_context,
+                history=st.session_state.messages[:-1] # Exclude the just-added user message to avoid duplication in history string?
+                # Actually, the service iterates `history`. If I just added the user message to state, it's in history.
+                # If I pass the whole history, the service will print "User: <prompt>" in the history block AND "User Question: <prompt>" at the end.
+                # That's redundant.
+                # Better to pass history excluding the current prompt.
+            )
 
             st.session_state.messages.append({"role": "assistant", "content": response})
             chat_container.chat_message("assistant").write(response)
 
     with col_work:
-        st.title(f"Workspace: {definition['title']}")
+        st.title(f"Workspace")
 
         # Data Preview
         with st.expander("Data Preview (First 5 rows)", expanded=False):
@@ -337,6 +401,8 @@ def render_workspace():
                     st.dataframe(res)
                 if error:
                     st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
+            elif response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
+                 st.session_state.sql_code = response_dict_sql['text']
 
 # --- Main App Logic ---
 
