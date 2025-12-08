@@ -5,17 +5,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 class LLMService:
     def __init__(self):
-        if GEMINI_API_KEY:
-            genai.configure(api_key=GEMINI_API_KEY)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-            self.has_key = True
-        else:
-            self.has_key = False
-            print("Warning: GEMINI_API_KEY not found. Using mock mode.")
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.model = None
+        if self.api_key:
+            self._configure(self.api_key)
+
+    def _configure(self, key: str):
+        genai.configure(api_key=key)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.api_key = key
+
+    def set_api_key(self, key: str):
+        self._configure(key)
+
+    @property
+    def has_key(self):
+        return bool(self.api_key)
 
     def generate_json(self, prompt: str) -> dict:
         if not self.has_key:

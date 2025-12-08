@@ -4,3 +4,4 @@ faker
 google-generativeai
 python-dotenv
 numpy
+streamlit-code-editor
