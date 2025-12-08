@@ -3,6 +3,7 @@ import numpy as np
 from faker import Faker
 import random
 import json
+import re
 from .llm import LLMService
 from .chaos import ChaosToolkit
 
@@ -22,13 +23,13 @@ class ProjectGenerator:
             "tasks": ["List of 3-5 specific questions or tasks for the analyst"],
             "recipe": {{
                 "anchor_entity": {{
-                    "name": "Name of the main entity (e.g. 'Car Model', 'Department')",
+                    "name": "Name of the main entity (e.g. 'car_model', 'department')",
                     "options": ["List", "of", "5-10", "specific", "options"],
                     "weights": [0.1, 0.2, "etc (must sum to 1, length match options)"]
                 }},
                 "correlated_columns": [
                     {{
-                        "name": "Column Name",
+                        "name": "column_name_snake_case",
                         "type": "numeric",
                         "description": "Description",
                         "rules": {{
@@ -38,7 +39,7 @@ class ProjectGenerator:
                         }}
                     }},
                     {{
-                        "name": "Another Column",
+                        "name": "another_column_snake_case",
                         "type": "boolean",
                         "description": "Description",
                         "rules": {{
@@ -48,25 +49,37 @@ class ProjectGenerator:
                     }}
                 ],
                 "faker_columns": [
-                    {{"name": "Customer Name", "faker_method": "name"}},
-                    {{"name": "Date", "faker_method": "date_this_year"}},
-                    {{"name": "Email", "faker_method": "email"}},
-                    {{"name": "City", "faker_method": "city"}}
+                    {{"name": "customer_name", "faker_method": "name"}},
+                    {{"name": "date", "faker_method": "date_this_year"}},
+                    {{"name": "email", "faker_method": "email"}},
+                    {{"name": "city", "faker_method": "city"}}
                 ]
             }},
             "display_schema": [
-                {{"name": "Column Name", "type": "Type", "description": "Short desc"}}
+                {{"name": "column_name", "type": "Type", "description": "Short desc"}}
             ]
         }}
         """
         return llm_service.generate_json(prompt, api_key)
+
+    def _sanitize_column_name(self, name: str) -> str:
+        # Lowercase
+        name = name.lower()
+        # Replace spaces with underscores
+        name = name.replace(" ", "_")
+        # Remove non-alphanumeric (except underscore)
+        name = re.sub(r'[^a-z0-9_]', '', name)
+        # Ensure it doesn't start with a number
+        if name and name[0].isdigit():
+            name = "_" + name
+        return name
 
     def generate_dataset(self, recipe: dict, rows: int = 10000) -> pd.DataFrame:
         data = {}
 
         # 1. Generate Anchor Column
         anchor = recipe['anchor_entity']
-        anchor_name = anchor['name']
+        anchor_name = self._sanitize_column_name(anchor['name'])
         options = anchor['options']
         weights = anchor['weights']
 
@@ -84,15 +97,11 @@ class ProjectGenerator:
 
         # 2. Generate Correlated Columns
         for col in recipe.get('correlated_columns', []):
-            col_name = col['name']
+            col_name = self._sanitize_column_name(col['name'])
             col_type = col['type']
             rules = col['rules']
 
             values = []
-            # Optimization: Generate all random numbers at once per anchor group instead of row-by-row
-            # But strictly following recipe map:
-            # We can use map/apply for speed, but let's stick to simple logic for correctness first.
-            # To optimize for 10k rows:
             for i in range(rows):
                 anchor_val = data[anchor_name][i]
                 rule = rules.get(anchor_val, rules.get('default'))
@@ -121,7 +130,7 @@ class ProjectGenerator:
 
         # 3. Apply Fluff (Faker Columns)
         for col in recipe.get('faker_columns', []):
-            col_name = col['name']
+            col_name = self._sanitize_column_name(col['name'])
             method = col['faker_method']
 
             if hasattr(fake, method):
@@ -134,15 +143,17 @@ class ProjectGenerator:
         # 4. Inject Chaos
         col_types = {anchor_name: 'categorical'}
         for col in recipe.get('correlated_columns', []):
-            col_types[col['name']] = col['type']
+            clean_name = self._sanitize_column_name(col['name'])
+            col_types[clean_name] = col['type']
         for col in recipe.get('faker_columns', []):
+            clean_name = self._sanitize_column_name(col['name'])
             method = col['faker_method']
             if 'date' in method:
-                col_types[col['name']] = 'date'
+                col_types[clean_name] = 'date'
             elif 'year' in method:
-                col_types[col['name']] = 'numeric'
+                col_types[clean_name] = 'numeric'
             else:
-                col_types[col['name']] = 'string'
+                col_types[clean_name] = 'string'
 
         df = chaos.apply_chaos(df, col_types)
 
