@@ -200,10 +200,16 @@ def render_workspace():
             st.session_state.messages.append({"role": "user", "content": prompt})
             chat_container.chat_message("user").write(prompt)
 
+            # Prepare context including code
+            code_context = {
+                "python": st.session_state.python_code,
+                "sql": st.session_state.sql_code
+            }
+
             # Generate response
             context = f"Project: {definition['title']}. Scenario: {definition['description']}"
             full_prompt = f"You are a Senior Data Analyst mentor. The user is a Junior Analyst working on a project.\nContext: {context}\n\nUser: {prompt}\nMentor:"
-            response = llm_service.generate_text(full_prompt, st.session_state.api_key)
+            response = llm_service.generate_text(full_prompt, st.session_state.api_key, code_context)
 
             st.session_state.messages.append({"role": "assistant", "content": response})
             chat_container.chat_message("assistant").write(response)
@@ -223,6 +229,8 @@ def render_workspace():
             st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
 
             # Python Editor with advanced options
+            # IMPORTANT: We verify that st.session_state.python_code matches what the editor had on last run if possible
+            # But simpler: Update state ON CHANGE (every interaction)
             response_dict_py = code_editor(
                 st.session_state.python_code,
                 lang="python",
@@ -245,8 +253,11 @@ def render_workspace():
                 }]
             )
 
+            # Always sync state with editor content to avoid reset on other interactions
+            if response_dict_py['text'] != st.session_state.python_code and response_dict_py['text']:
+                 st.session_state.python_code = response_dict_py['text']
+
             if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
-                st.session_state.python_code = response_dict_py['text']
                 output, error, figs = run_python(response_dict_py['text'], df)
 
                 # Console Output
@@ -293,8 +304,11 @@ def render_workspace():
                 }]
             )
 
+            # Always sync state with editor content
+            if response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
+                 st.session_state.sql_code = response_dict_sql['text']
+
             if response_dict_sql['type'] == "submit" and len(response_dict_sql['text']) != 0:
-                st.session_state.sql_code = response_dict_sql['text']
                 res, error = run_sql(response_dict_sql['text'], df)
 
                 st.markdown("**Results:**")
