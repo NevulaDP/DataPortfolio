@@ -11,6 +11,7 @@ import seaborn as sns
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
+from services.security import SafeExecutor, SecurityError
 
 # --- Page Config ---
 st.set_page_config(
@@ -25,7 +26,7 @@ if 'project' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'python_code' not in st.session_state:
-    st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())"
+    st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())\n\n# Plotting example\n# plt.figure(figsize=(10, 6))\n# sns.histplot(df['amount'])\n# plt.show()"
 if 'sql_code' not in st.session_state:
     st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
 if 'api_key' not in st.session_state:
@@ -53,6 +54,10 @@ st.markdown("""
     }
     .console-error {
         color: #ff4b4b;
+    }
+    /* Attempt to fix dropdown cropping by ensuring high z-index for ace autocomplete */
+    .ace_editor.ace_autocomplete {
+        z-index: 10000 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,15 +105,20 @@ def run_sql(query, df):
         return None, str(e)
 
 def run_python(code, df):
+    # Security Check
+    try:
+        SafeExecutor.validate(code)
+    except SecurityError as e:
+        return None, str(e), []
+
     # Capture stdout
     output_buffer = io.StringIO()
 
     # Context for execution: Provide pandas, numpy, seaborn, matplotlib, etc.
-    # We also provide 'st' (Streamlit) so users can use st.write, st.pyplot explicitly if they want.
     local_scope = {
         "df": df,
         "pd": pd,
-        "np": np, # Explicitly provide numpy
+        "np": np,
         "plt": plt,
         "sns": sns,
         "st": st
@@ -225,22 +235,24 @@ def render_workspace():
         tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
 
         with tab_python:
-            st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`. Example: `plt.plot(df['col'])`.")
-            st.warning("⚠️ Code is executed on the server. Do not run malicious code.")
+            st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
+            st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures.")
 
             # Python Editor with advanced options
-            # IMPORTANT: We verify that st.session_state.python_code matches what the editor had on last run if possible
-            # But simpler: Update state ON CHANGE (every interaction)
             response_dict_py = code_editor(
                 st.session_state.python_code,
                 lang="python",
-                height=600,
-                theme="github",
+                height=500, # Reduced slightly to fit better, but still large
+                theme="dawn", # A cleaner light theme often preferred for data science (vs github)
                 options={
                     "showLineNumbers": True,
                     "wrap": True,
                     "autoScrollEditorIntoView": True,
+                    "enableBasicAutocompletion": True,
+                    "enableLiveAutocompletion": True,
+                    "enableSnippets": True,
                     "fontSize": 14,
+                    "fontFamily": "monospace"
                 },
                 buttons=[{
                     "name": "Run",
@@ -253,7 +265,7 @@ def render_workspace():
                 }]
             )
 
-            # Always sync state with editor content to avoid reset on other interactions
+            # Always sync state with editor content
             if response_dict_py['text'] != st.session_state.python_code and response_dict_py['text']:
                  st.session_state.python_code = response_dict_py['text']
 
@@ -265,7 +277,7 @@ def render_workspace():
                 if output:
                     st.markdown(f'<div class="console-output">{output}</div>', unsafe_allow_html=True)
                 elif not error:
-                     st.markdown(f'<div class="console-output" style="color: #888;">No output</div>', unsafe_allow_html=True)
+                     st.markdown(f'<div class="console-output" style="color: #888;">No textual output</div>', unsafe_allow_html=True)
 
                 # Error Output
                 if error:
@@ -286,8 +298,8 @@ def render_workspace():
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
                 lang="sql",
-                height=600,
-                theme="github",
+                height=500,
+                theme="dawn",
                 options={
                     "showLineNumbers": True,
                     "wrap": True,
