@@ -14,8 +14,8 @@ class LLMService:
     def _get_model(self, api_key: str):
         # Re-configuring globally is the only documented way for the high-level API.
         genai.configure(api_key=api_key)
-        # Using Gemini 2.0 Flash as it is explicitly available to the user and sufficiently advanced
-        return genai.GenerativeModel('gemini-2.0-flash')
+        # Using Gemini 2.5 Flash as requested and confirmed available
+        return genai.GenerativeModel('gemini-2.5-flash')
 
     def list_available_models(self, api_key: str):
         try:
@@ -41,7 +41,7 @@ class LLMService:
             print(f"Error calling Gemini: {e}")
             if "404" in str(e) or "not found" in str(e).lower():
                 models = self.list_available_models(key_to_use)
-                return {"error": f"Model 'gemini-2.0-flash' not found. Your key has access to: {', '.join(models)}"}
+                return {"error": f"Model 'gemini-2.5-flash' not found. Your key has access to: {', '.join(models)}"}
             return self._mock_response(prompt)
 
     def generate_text(self, prompt: str, api_key: str = None) -> str:
