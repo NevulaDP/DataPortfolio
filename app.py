@@ -525,11 +525,198 @@ def render_workspace():
                 if error:
                     st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
 
-            elif response_dict_sql['type'] == "stop":
-                pass
+        # Helper to manage cells
+        def add_cell(cell_type, index):
+            new_cell = {"id": str(uuid.uuid4()), "type": cell_type, "content": ""}
+            st.session_state.notebook_cells.insert(index + 1, new_cell)
 
-            elif response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
-                 st.session_state.sql_code = response_dict_sql['text']
+        def delete_cell(index):
+            if len(st.session_state.notebook_cells) > 1:
+                st.session_state.notebook_cells.pop(index)
+            else:
+                st.error("Cannot delete the last cell.")
+
+        # Iterate through cells
+        for i, cell in enumerate(st.session_state.notebook_cells):
+            cell_id = cell['id']
+
+            # Container for each cell
+            with st.container():
+
+                # --- PYTHON CELL ---
+                if cell['type'] == 'code':
+                    st.caption(f"Python Cell [{i+1}]")
+                    editor_key = f"editor_{cell_id}"
+
+                    # Sync logic
+                    if editor_key in st.session_state and st.session_state[editor_key]:
+                            if "text" in st.session_state[editor_key]:
+                                cell['content'] = st.session_state[editor_key]["text"]
+
+                    response_dict = code_editor(
+                        cell['content'],
+                        key=editor_key,
+                        lang="python",
+                        height=200,
+                        theme="dawn",
+                        options={
+                            "showLineNumbers": True,
+                            "wrap": True,
+                            "autoScrollEditorIntoView": False,
+                            "fontSize": 14,
+                            "fontFamily": "monospace"
+                        },
+                        buttons=[{
+                            "name": "Run",
+                            "feather": "Play",
+                            "primary": True,
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["submit"],
+                            "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                        },
+                        {
+                            "name": "Stop",
+                            "feather": "Square",
+                            "primary": False,
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["stop"],
+                            "style": {"bottom": "0.46rem", "right": "6rem"}
+                        }]
+                    )
+
+                    # Update content
+                    if response_dict['text'] != cell['content']:
+                        cell['content'] = response_dict['text']
+
+                    # Handle Execution
+                    if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
+                        output, error, figs, last_value = run_python(response_dict['text'], df, st.session_state.notebook_scope)
+                        st.session_state.cell_outputs[cell_id] = {
+                            "output": output,
+                            "error": error,
+                            "figs": figs,
+                            "last_value": last_value
+                        }
+                    elif response_dict['type'] == "stop":
+                        pass
+
+                    # Render Output
+                    if cell_id in st.session_state.cell_outputs:
+                        out = st.session_state.cell_outputs[cell_id]
+
+                        if out['output']:
+                            st.markdown(f'<div class="console-output">{out["output"]}</div>', unsafe_allow_html=True)
+
+                        if out['last_value'] is not None:
+                            st.markdown("**Result:**")
+                            if isinstance(out['last_value'], (pd.DataFrame, pd.Series)):
+                                st.dataframe(out['last_value'])
+                            else:
+                                st.write(out['last_value'])
+
+                        if out['error']:
+                            st.markdown(f'<div class="console-output console-error">{out["error"]}</div>', unsafe_allow_html=True)
+
+                        if out['figs']:
+                            for fig in out['figs']:
+                                st.pyplot(fig)
+                                plt.close(fig)
+
+                # --- SQL CELL ---
+                elif cell['type'] == 'sql':
+                    st.caption(f"SQL Cell [{i+1}]")
+                    editor_key = f"sql_editor_{cell_id}"
+
+                    # Sync logic
+                    if editor_key in st.session_state and st.session_state[editor_key]:
+                            if "text" in st.session_state[editor_key]:
+                                cell['content'] = st.session_state[editor_key]["text"]
+
+                    response_dict = code_editor(
+                        cell['content'],
+                        key=editor_key,
+                        lang="sql",
+                        height=200,
+                        theme="dawn",
+                        options={
+                            "showLineNumbers": True,
+                            "wrap": True,
+                            "fontSize": 14,
+                        },
+                        buttons=[{
+                            "name": "Run",
+                            "feather": "Play",
+                            "primary": True,
+                            "hasText": True,
+                            "alwaysOn": True,
+                            "commands": ["submit"],
+                            "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                        }]
+                    )
+
+                    # Update content
+                    if response_dict['text'] != cell['content']:
+                        cell['content'] = response_dict['text']
+
+                    # Handle Execution
+                    if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
+                        # Use the dataframe from the current scope
+                        current_df = st.session_state.notebook_scope.get('df', df)
+                        res, error = run_sql(response_dict['text'], current_df)
+
+                        st.session_state.cell_outputs[cell_id] = {
+                            "output": None,
+                            "error": error,
+                            "figs": [],
+                            "last_value": res
+                        }
+
+                    # Render Output
+                    if cell_id in st.session_state.cell_outputs:
+                        out = st.session_state.cell_outputs[cell_id]
+                        if out['last_value'] is not None:
+                            st.dataframe(out['last_value'])
+                        if out['error']:
+                            st.markdown(f'<div class="console-output console-error">{out["error"]}</div>', unsafe_allow_html=True)
+
+
+                # --- MARKDOWN CELL ---
+                elif cell['type'] == 'markdown':
+                    editor_key = f"md_area_{cell_id}"
+
+                    md_tabs = st.tabs(["Edit", "Preview"])
+                    with md_tabs[0]:
+                        # Use st.text_area for markdown editing
+                        val = st.text_area(
+                            "Markdown Content",
+                            value=cell['content'],
+                            height=150,
+                            key=editor_key,
+                            label_visibility="collapsed"
+                        )
+                        # Sync: st.text_area updates state automatically on blur/cmd+enter
+                        cell['content'] = val
+
+                    with md_tabs[1]:
+                        if cell['content']:
+                            st.markdown(cell['content'])
+                        else:
+                            st.write("_No content_")
+
+                # Add/Delete Controls
+                col_cmds = st.columns([1, 1, 1, 1, 8])
+                with col_cmds[0]:
+                    st.button("➕ Py", key=f"add_code_{i}", on_click=add_cell, args=("code", i), help="Add Python cell below")
+                with col_cmds[1]:
+                    st.button("➕ SQL", key=f"add_sql_{i}", on_click=add_cell, args=("sql", i), help="Add SQL cell below")
+                with col_cmds[2]:
+                    st.button("➕ Tx", key=f"add_text_{i}", on_click=add_cell, args=("markdown", i), help="Add Text cell below")
+                with col_cmds[3]:
+                    st.button("🗑️", key=f"del_{i}", on_click=delete_cell, args=(i,), help="Delete this cell")
+
+                st.divider()
 
 # --- Main App Logic ---
 
