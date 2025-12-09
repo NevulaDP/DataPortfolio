@@ -373,7 +373,7 @@ def render_workspace():
                 # But to be explicit and perhaps handle persistence if I add it later:
                 pass
 
-        else: # SQL Query
+        with tab_sql:
             st.markdown("Table name is `dataset`.")
 
             # SQL Editor
