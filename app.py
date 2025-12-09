@@ -342,12 +342,22 @@ def render_workspace():
         for i, cell in enumerate(st.session_state.notebook_cells):
             cell_id = cell['id']
 
-            # Container for each cell
-            with st.container():
+            # Use st.container(border=True) for a card-like look
+            with st.container(border=True):
+                # Header Row: Type label + Delete Button
+                col_header = st.columns([8, 1])
+                with col_header[0]:
+                    if cell['type'] == 'code':
+                        st.caption(f"🐍 Python Cell [{i+1}]")
+                    elif cell['type'] == 'sql':
+                        st.caption(f"💾 SQL Cell [{i+1}]")
+                    else:
+                        st.caption(f"📝 Text Cell [{i+1}]")
+                with col_header[1]:
+                     st.button("🗑️", key=f"del_{cell_id}", on_click=delete_cell, args=(i,), help="Delete this cell", type="tertiary")
 
                 # --- PYTHON CELL ---
                 if cell['type'] == 'code':
-                    st.caption(f"Python Cell [{i+1}]")
                     editor_key = f"editor_{cell_id}"
 
                     # Sync logic
@@ -428,7 +438,6 @@ def render_workspace():
 
                 # --- SQL CELL ---
                 elif cell['type'] == 'sql':
-                    st.caption(f"SQL Cell [{i+1}]")
                     editor_key = f"sql_editor_{cell_id}"
 
                     # Sync logic
@@ -507,18 +516,22 @@ def render_workspace():
                         else:
                             st.write("_No content_")
 
-                # Add/Delete Controls
-                col_cmds = st.columns([1, 1, 1, 1, 8])
-                with col_cmds[0]:
-                    st.button("➕ Py", key=f"add_code_{cell_id}", on_click=add_cell, args=("code", i), help="Add Python cell below")
-                with col_cmds[1]:
-                    st.button("➕ SQL", key=f"add_sql_{cell_id}", on_click=add_cell, args=("sql", i), help="Add SQL cell below")
-                with col_cmds[2]:
-                    st.button("➕ Tx", key=f"add_text_{cell_id}", on_click=add_cell, args=("markdown", i), help="Add Text cell below")
-                with col_cmds[3]:
-                    st.button("🗑️", key=f"del_{cell_id}", on_click=delete_cell, args=(i,), help="Delete this cell")
+        # Global Add Cell Toolbar (Bottom)
+        st.markdown("#### Add Cell")
+        col_add = st.columns([1, 1, 1, 5])
+        last_idx = len(st.session_state.notebook_cells) - 1
 
-                st.divider()
+        # We need a stable key for these main buttons.
+        # Since they always add to the end, we can use a static key or one based on total count.
+        # But 'add_cell' function takes an 'index' to insert *after*.
+        # To add to the end, we pass the last index.
+
+        with col_add[0]:
+             st.button("🐍 Python", key="add_py_bottom", on_click=add_cell, args=("code", last_idx), type="secondary")
+        with col_add[1]:
+             st.button("💾 SQL", key="add_sql_bottom", on_click=add_cell, args=("sql", last_idx), type="secondary")
+        with col_add[2]:
+             st.button("📝 Text", key="add_text_bottom", on_click=add_cell, args=("markdown", last_idx), type="secondary")
 
 # --- Main App Logic ---
 
