@@ -9,6 +9,7 @@ import traceback
 import matplotlib.pyplot as plt
 import seaborn as sns
 import ast
+import uuid
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -28,6 +29,12 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'python_code' not in st.session_state:
     st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())\n\n# Plotting example\n# plt.figure(figsize=(10, 6))\n# sns.histplot(df['amount'])\n# plt.show()"
+if 'notebook_cells' not in st.session_state:
+    st.session_state.notebook_cells = [
+        {"id": str(uuid.uuid4()), "type": "code", "content": st.session_state.python_code}
+    ]
+if 'cell_outputs' not in st.session_state:
+    st.session_state.cell_outputs = {}
 if 'sql_code' not in st.session_state:
     st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
 if 'api_key' not in st.session_state:
@@ -130,17 +137,14 @@ def run_sql(query, df):
     except Exception as e:
         return None, str(e)
 
-def run_python(code, df):
-    # Security Check
-    try:
-        SafeExecutor.validate(code)
-    except SecurityError as e:
-        return None, str(e), [], None
+def run_notebook(df):
+    """
+    Executes all cells in the notebook sequentially.
+    """
+    st.session_state.cell_outputs = {} # Clear previous outputs
 
-    # Capture stdout
-    output_buffer = io.StringIO()
-
-    # Context for execution: Provide pandas, numpy, seaborn, matplotlib, etc.
+    # Initialize shared scope
+    # We must re-create the module references each time because they are not picklable in session_state
     local_scope = {
         "df": df,
         "pd": pd,
@@ -150,38 +154,89 @@ def run_python(code, df):
         "st": st
     }
 
-    figures = []
-    error_message = None
-    last_value = None
+    for cell in st.session_state.notebook_cells:
+        if cell['type'] == 'markdown':
+            # Markdown cells don't execute code, but we pass them through or render them
+            continue
 
-    try:
-        with contextlib.redirect_stdout(output_buffer):
-            # Parse code to check for last expression
-            tree = ast.parse(code)
-            if tree.body and isinstance(tree.body[-1], ast.Expr):
-                # Separate last expression
-                last_expr = tree.body.pop()
-                # Compile and run the preamble
-                if tree.body:
-                    exec_code = compile(tree, filename="<string>", mode="exec")
-                    exec(exec_code, {}, local_scope)
+        code = cell['content']
+        if not code.strip():
+            continue
 
-                # Compile and eval the last expression
-                eval_code = compile(ast.Expression(last_expr.value), filename="<string>", mode="eval")
-                last_value = eval(eval_code, {}, local_scope)
-            else:
-                exec(code, {}, local_scope)
+        # Security Check
+        try:
+            SafeExecutor.validate(code)
+        except SecurityError as e:
+            st.session_state.cell_outputs[cell['id']] = {
+                "error": str(e),
+                "output": None,
+                "figures": [],
+                "result": None
+            }
+            continue
 
-        # Check for open figures
-        if plt.get_fignums():
-            fignums = plt.get_fignums()
-            for i in fignums:
-                figures.append(plt.figure(i))
+        # Capture stdout
+        output_buffer = io.StringIO()
+        figures = []
+        error_message = None
+        last_value = None
 
-    except Exception:
-        error_message = traceback.format_exc()
+        try:
+            with contextlib.redirect_stdout(output_buffer):
+                # Parse code to check for last expression
+                tree = ast.parse(code)
+                if tree.body and isinstance(tree.body[-1], ast.Expr):
+                    # Separate last expression
+                    last_expr = tree.body.pop()
+                    # Compile and run the preamble
+                    if tree.body:
+                        exec_code = compile(tree, filename="<string>", mode="exec")
+                        exec(exec_code, {}, local_scope)
 
-    return output_buffer.getvalue(), error_message, figures, last_value
+                    # Compile and eval the last expression
+                    eval_code = compile(ast.Expression(last_expr.value), filename="<string>", mode="eval")
+                    last_value = eval(eval_code, {}, local_scope)
+                else:
+                    exec(code, {}, local_scope)
+
+            # Check for open figures
+            # We need to capture and close figures per cell so they don't bleed into next cells
+            if plt.get_fignums():
+                fignums = plt.get_fignums()
+                for i in fignums:
+                    fig = plt.figure(i)
+                    figures.append(fig)
+
+        except Exception:
+            error_message = traceback.format_exc()
+
+        # Store results
+        st.session_state.cell_outputs[cell['id']] = {
+            "output": output_buffer.getvalue(),
+            "error": error_message,
+            "figures": figures,
+            "result": last_value
+        }
+
+        # Cleanup figures for next cell
+        plt.close('all')
+
+def add_cell(type="code"):
+    st.session_state.notebook_cells.append({
+        "id": str(uuid.uuid4()),
+        "type": type,
+        "content": ""
+    })
+
+def delete_cell(index):
+    if 0 <= index < len(st.session_state.notebook_cells):
+        del st.session_state.notebook_cells[index]
+
+def move_cell(index, direction):
+    if direction == "up" and index > 0:
+        st.session_state.notebook_cells[index], st.session_state.notebook_cells[index-1] = st.session_state.notebook_cells[index-1], st.session_state.notebook_cells[index]
+    elif direction == "down" and index < len(st.session_state.notebook_cells) - 1:
+        st.session_state.notebook_cells[index], st.session_state.notebook_cells[index+1] = st.session_state.notebook_cells[index+1], st.session_state.notebook_cells[index]
 
 # --- UI Components ---
 
@@ -287,90 +342,114 @@ def render_workspace():
 
         with tab_python:
             st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
-            st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures.")
+            st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. Run cells sequentially from top to bottom.")
 
-            # Synchronize state with editor content BEFORE initialization to prevent reversion
-            if "python_editor" in st.session_state and st.session_state.python_editor:
-                if "text" in st.session_state.python_editor:
-                    st.session_state.python_code = st.session_state.python_editor["text"]
+            # Notebook UI Loop
+            for i, cell in enumerate(st.session_state.notebook_cells):
+                with st.container():
+                    # Cell Header (Delete/Move)
+                    col_label, col_up, col_down, col_del = st.columns([8, 1, 1, 1])
+                    with col_label:
+                        st.markdown(f"**[{i+1}] {cell['type'].capitalize()} Cell**")
+                    with col_up:
+                        if st.button("⬆️", key=f"up_{cell['id']}"):
+                            move_cell(i, "up")
+                            st.rerun()
+                    with col_down:
+                        if st.button("⬇️", key=f"down_{cell['id']}"):
+                            move_cell(i, "down")
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑️", key=f"del_{cell['id']}"):
+                            delete_cell(i)
+                            st.rerun()
 
-            # Python Editor with advanced options
-            response_dict_py = code_editor(
-                st.session_state.python_code,
-                key="python_editor",
-                lang="python",
-                height=600,
-                theme="dawn",
-                options={
-                    "showLineNumbers": True,
-                    "wrap": True,
-                    "autoScrollEditorIntoView": True,
-                    "enableBasicAutocompletion": True,
-                    "enableLiveAutocompletion": True,
-                    "enableSnippets": True,
-                    "fontSize": 14,
-                    "fontFamily": "monospace"
-                },
-                buttons=[{
-                    "name": "Run",
-                    "feather": "Play",
-                    "primary": True,
-                    "hasText": True,
-                    "alwaysOn": True,
-                    "commands": ["submit"],
-                    "style": {"bottom": "0.46rem", "right": "0.4rem"}
-                },
-                {
-                    "name": "Stop",
-                    "feather": "Square",
-                    "primary": False,
-                    "hasText": True,
-                    "alwaysOn": True,
-                    "commands": ["stop"],
-                    "style": {"bottom": "0.46rem", "right": "6rem"}
-                }]
-            )
+                    # Cell Content
+                    if cell['type'] == 'code':
+                        # Synchronize state for this specific cell editor
+                        editor_key = f"editor_{cell['id']}"
+                        if editor_key in st.session_state and st.session_state[editor_key]:
+                             if "text" in st.session_state[editor_key]:
+                                  cell['content'] = st.session_state[editor_key]["text"]
 
-            # Debugging
+                        response_dict = code_editor(
+                            cell['content'],
+                            key=editor_key,
+                            lang="python",
+                            height=200 if len(cell['content'].split('\n')) < 10 else 400,
+                            theme="dawn",
+                            options={
+                                "showLineNumbers": True,
+                                "wrap": True,
+                                "autoScrollEditorIntoView": False,
+                                "fontSize": 14,
+                                "fontFamily": "monospace"
+                            },
+                            buttons=[{
+                                "name": "Run All",
+                                "feather": "Play",
+                                "primary": True,
+                                "hasText": True,
+                                "alwaysOn": True,
+                                "commands": ["submit"],
+                                "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                            }]
+                        )
 
-            # Always sync state with editor content
-            if response_dict_py['text'] != st.session_state.python_code and response_dict_py['text']:
-                 st.session_state.python_code = response_dict_py['text']
+                        if response_dict['text'] != cell['content']:
+                            cell['content'] = response_dict['text']
 
-            if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
-                output, error, figs, last_value = run_python(response_dict_py['text'], df)
+                        # Handle Run
+                        if response_dict['type'] == "submit":
+                            run_notebook(df)
+                            # st.rerun() # Removed due to potential issues in testing env
 
-                # Console Output
-                st.markdown("**Console Output:**")
-                if output:
-                    st.markdown(f'<div class="console-output">{output}</div>', unsafe_allow_html=True)
-                elif not error and last_value is None:
-                     st.markdown(f'<div class="console-output" style="color: #888;">No textual output</div>', unsafe_allow_html=True)
+                        # Display Output for this cell
+                        if cell['id'] in st.session_state.cell_outputs:
+                            res = st.session_state.cell_outputs[cell['id']]
 
-                # Display Last Value (REPL style)
-                if last_value is not None:
-                    st.markdown("**Result:**")
-                    if isinstance(last_value, (pd.DataFrame, pd.Series)):
-                        st.dataframe(last_value)
-                    else:
-                        st.write(last_value)
+                            if res['output']:
+                                st.markdown(f'<div class="console-output">{res["output"]}</div>', unsafe_allow_html=True)
 
-                # Error Output
-                if error:
-                    st.markdown("**Error:**")
-                    st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
+                            if res['result'] is not None:
+                                st.markdown("**Result:**")
+                                if isinstance(res['result'], (pd.DataFrame, pd.Series)):
+                                    st.dataframe(res['result'])
+                                else:
+                                    st.write(res['result'])
 
-                # Plots
-                if figs:
-                    st.markdown("**Plots:**")
-                    for fig in figs:
-                        st.pyplot(fig)
-                        plt.close(fig) # Cleanup
+                            if res['error']:
+                                st.markdown(f'<div class="console-output console-error">{res["error"]}</div>', unsafe_allow_html=True)
 
-            elif response_dict_py['type'] == "stop":
-                # Clear output by doing nothing (since output rendering is inside the submit block)
-                # But to be explicit and perhaps handle persistence if I add it later:
-                pass
+                            if res['figures']:
+                                for fig in res['figures']:
+                                    st.pyplot(fig)
+
+                    elif cell['type'] == 'markdown':
+                        # Markdown Editor
+                        # Use a text area for editing, display rendered below
+                        new_content = st.text_area(
+                            f"Markdown Content",
+                            value=cell['content'],
+                            key=f"md_{cell['id']}",
+                            height=150
+                        )
+                        if new_content != cell['content']:
+                            cell['content'] = new_content
+
+                        if cell['content']:
+                            st.markdown(cell['content'])
+
+            # Add Cell Buttons
+            col_add_code, col_add_md = st.columns(2)
+            with col_add_code:
+                if st.button("➕ Add Code Cell", use_container_width=True):
+                    add_cell("code")
+                    st.rerun()
+            with col_add_md:
+                if st.button("➕ Add Markdown Cell", use_container_width=True):
+                    add_cell("markdown")
+                    st.rerun()
 
         with tab_sql:
             st.markdown("Table name is `dataset`.")
