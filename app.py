@@ -224,6 +224,11 @@ def render_sidebar():
 
         st.divider()
 
+        # Data Preview in Sidebar
+        if st.session_state.project:
+            with st.expander("Data Preview (First 5 rows)"):
+                st.dataframe(st.session_state.project['data'].head())
+
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
     st.markdown("""
@@ -298,10 +303,6 @@ def render_workspace():
     with col_work:
         st.title(f"Workspace")
 
-        # Data Preview
-        with st.expander("Data Preview (First 5 rows)", expanded=False):
-            st.dataframe(df.head())
-
         st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
         st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. You can add text cells to document your work.")
 
@@ -344,16 +345,26 @@ def render_workspace():
 
             # Use st.container(border=True) for a card-like look
             with st.container(border=True):
-                # Header Row: Type label + Delete Button
-                col_header = st.columns([8, 1])
+                # Header Row: Minimal
+                col_header = st.columns([1, 15, 1])
                 with col_header[0]:
+                    # Icon only
                     if cell['type'] == 'code':
-                        st.caption(f"🐍 Python Cell [{i+1}]")
+                        st.write("🐍")
                     elif cell['type'] == 'sql':
-                        st.caption(f"💾 SQL Cell [{i+1}]")
+                        st.write("💾")
                     else:
-                        st.caption(f"📝 Text Cell [{i+1}]")
+                        st.write("📝")
+
+                # Middle column for any extra controls (like toggle for markdown)
                 with col_header[1]:
+                    if cell['type'] == 'markdown':
+                        # View toggle
+                        view_mode = st.toggle("Preview", key=f"view_toggle_{cell_id}")
+                    else:
+                        st.empty()
+
+                with col_header[2]:
                      st.button("🗑️", key=f"del_{cell_id}", on_click=delete_cell, args=(i,), help="Delete this cell", type="tertiary")
 
                 # --- PYTHON CELL ---
@@ -497,24 +508,28 @@ def render_workspace():
                 elif cell['type'] == 'markdown':
                     editor_key = f"md_area_{cell_id}"
 
-                    md_tabs = st.tabs(["Edit", "Preview"])
-                    with md_tabs[0]:
-                        # Use st.text_area for markdown editing
+                    # Check the toggle state from the header
+                    is_preview = st.session_state.get(f"view_toggle_{cell_id}", False)
+
+                    if not is_preview:
+                        # Edit Mode
                         val = st.text_area(
                             "Markdown Content",
                             value=cell['content'],
-                            height=150,
+                            height=None, # Auto height if supported? No, default.
                             key=editor_key,
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            placeholder="Type markdown here... (Use # for headers, - for lists)"
                         )
-                        # Sync: st.text_area updates state automatically on blur/cmd+enter
-                        cell['content'] = val
-
-                    with md_tabs[1]:
+                        # Sync
+                        if val != cell['content']:
+                            cell['content'] = val
+                    else:
+                        # Preview Mode
                         if cell['content']:
                             st.markdown(cell['content'])
                         else:
-                            st.write("_No content_")
+                            st.caption("_Empty markdown cell_")
 
         # Global Add Cell Toolbar (Bottom)
         st.markdown("#### Add Cell")
