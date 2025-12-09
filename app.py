@@ -302,19 +302,228 @@ def render_workspace():
         with st.expander("Data Preview (First 5 rows)", expanded=False):
             st.dataframe(df.head())
 
-        st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
-        st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. You can add text cells to document your work.")
+        # Editors
+        tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
 
-        # Notebook State Initialization
-        if 'notebook_scope' not in st.session_state:
-            st.session_state.notebook_scope = {
-                "df": df,
-                "pd": pd,
-                "np": np,
-                "plt": plt,
-                "sns": sns,
-                "st": st
-            }
+        with tab_python:
+            st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
+            st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. You can add text cells to document your work.")
+
+            # Notebook State Initialization
+            if 'notebook_scope' not in st.session_state:
+                st.session_state.notebook_scope = {
+                    "df": df,
+                    "pd": pd,
+                    "np": np,
+                    "plt": plt,
+                    "sns": sns,
+                    "st": st
+                }
+
+            # Helper to manage cells
+            def add_cell(cell_type, index):
+                new_cell = {"id": str(uuid.uuid4()), "type": cell_type, "content": ""}
+                st.session_state.notebook_cells.insert(index + 1, new_cell)
+
+            def delete_cell(index):
+                if len(st.session_state.notebook_cells) > 1:
+                    st.session_state.notebook_cells.pop(index)
+                    # Also cleanup output
+                    cell_id = st.session_state.notebook_cells[index]['id'] if index < len(st.session_state.notebook_cells) else None
+                    # Actually we need the deleted cell's ID, which we don't have easily after pop unless we saved it.
+                    # But cleaning up st.session_state.cell_outputs is optimization, not strictly required for correctness (orphaned keys).
+                else:
+                    st.error("Cannot delete the last cell.")
+
+            # Iterate through cells
+            for i, cell in enumerate(st.session_state.notebook_cells):
+                cell_id = cell['id']
+
+                # Container for each cell
+                with st.container():
+                    # Controls (Add/Delete) - Top of cell or bottom?
+                    # Let's put a small toolbar above or below.
+
+                    if cell['type'] == 'code':
+                        editor_key = f"editor_{cell_id}"
+
+                        # Sync logic
+                        if editor_key in st.session_state and st.session_state[editor_key]:
+                             if "text" in st.session_state[editor_key]:
+                                 cell['content'] = st.session_state[editor_key]["text"]
+
+                        response_dict = code_editor(
+                            cell['content'],
+                            key=editor_key,
+                            lang="python",
+                            height=200, # Smaller default height per cell
+                            theme="dawn",
+                            options={
+                                "showLineNumbers": True,
+                                "wrap": True,
+                                "autoScrollEditorIntoView": False, # Annoying in list
+                                "fontSize": 14,
+                                "fontFamily": "monospace"
+                            },
+                            buttons=[{
+                                "name": "Run",
+                                "feather": "Play",
+                                "primary": True,
+                                "hasText": True,
+                                "alwaysOn": True,
+                                "commands": ["submit"],
+                                "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                            },
+                            {
+                                "name": "Stop",
+                                "feather": "Square",
+                                "primary": False,
+                                "hasText": True,
+                                "alwaysOn": True,
+                                "commands": ["stop"],
+                                "style": {"bottom": "0.46rem", "right": "6rem"}
+                            }]
+                        )
+
+                        # Update content
+                        if response_dict['text'] != cell['content']:
+                            cell['content'] = response_dict['text']
+
+                        # Handle Execution
+                        if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
+                            # Re-run logic:
+                            # 1. We could re-run all previous cells to ensure consistency
+                            # 2. OR rely on the persistent scope.
+                            # Given Streamlit reruns, let's rely on persistent scope for now to enable interactive feel.
+                            # But if the user edits cell 1 and runs cell 2, cell 2 might see stale state if cell 1 wasn't re-run.
+                            # For true notebook feel in Streamlit, "Run All Above" is safer, but "Run" is standard.
+
+                            output, error, figs, last_value = run_python(response_dict['text'], df, st.session_state.notebook_scope)
+                            st.session_state.cell_outputs[cell_id] = {
+                                "output": output,
+                                "error": error,
+                                "figs": figs,
+                                "last_value": last_value
+                            }
+                        elif response_dict['type'] == "stop":
+                            pass
+
+                        # Render Output
+                        if cell_id in st.session_state.cell_outputs:
+                            out = st.session_state.cell_outputs[cell_id]
+
+                            if out['output']:
+                                st.markdown(f'<div class="console-output">{out["output"]}</div>', unsafe_allow_html=True)
+
+                            if out['last_value'] is not None:
+                                st.markdown("**Result:**")
+                                if isinstance(out['last_value'], (pd.DataFrame, pd.Series)):
+                                    st.dataframe(out['last_value'])
+                                else:
+                                    st.write(out['last_value'])
+
+                            if out['error']:
+                                st.markdown(f'<div class="console-output console-error">{out["error"]}</div>', unsafe_allow_html=True)
+
+                            if out['figs']:
+                                for fig in out['figs']:
+                                    st.pyplot(fig)
+                                    plt.close(fig)
+
+                    elif cell['type'] == 'markdown':
+                        editor_key = f"md_editor_{cell_id}"
+
+                        if editor_key in st.session_state and st.session_state[editor_key]:
+                             if "text" in st.session_state[editor_key]:
+                                 cell['content'] = st.session_state[editor_key]["text"]
+
+                        # Use a simpler editor configuration or even st.text_area if code_editor is too heavy,
+                        # but code_editor gives consistency.
+                        # Display Mode: Tabbed? Edit/Preview?
+                        # Let's use two columns or tabs, or just render below.
+
+                        md_tabs = st.tabs(["Edit", "Preview"])
+                        with md_tabs[0]:
+                             response_dict = code_editor(
+                                cell['content'],
+                                key=editor_key,
+                                lang="markdown",
+                                height=150,
+                                theme="dawn",
+                                options={"wrap": True, "fontSize": 14}
+                            )
+                             if response_dict['text'] != cell['content']:
+                                cell['content'] = response_dict['text']
+
+                        with md_tabs[1]:
+                            if cell['content']:
+                                st.markdown(cell['content'])
+                            else:
+                                st.write("No content to preview.")
+
+                    # Add/Delete Controls
+                    col_cmds = st.columns([2, 2, 1, 10])
+                    with col_cmds[0]:
+                        st.button("➕ Code", key=f"add_code_{i}", on_click=add_cell, args=("code", i), help="Add code cell below")
+                    with col_cmds[1]:
+                        st.button("➕ Text", key=f"add_text_{i}", on_click=add_cell, args=("markdown", i), help="Add text cell below")
+                    with col_cmds[2]:
+                        st.button("🗑️", key=f"del_{i}", on_click=delete_cell, args=(i,), help="Delete this cell")
+
+                    st.divider()
+
+        with tab_sql:
+            st.markdown("Table name is `dataset`.")
+
+            # Synchronize state with editor content BEFORE initialization to prevent reversion
+            if "sql_editor" in st.session_state and st.session_state.sql_editor:
+                if "text" in st.session_state.sql_editor:
+                    st.session_state.sql_code = st.session_state.sql_editor["text"]
+
+            # SQL Editor
+            response_dict_sql = code_editor(
+                st.session_state.sql_code,
+                key="sql_editor",
+                lang="sql",
+                height=600,
+                theme="dawn",
+                options={
+                    "showLineNumbers": True,
+                    "wrap": True,
+                    "fontSize": 14,
+                },
+                 buttons=[{
+                    "name": "Run",
+                    "feather": "Play",
+                    "primary": True,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["submit"],
+                    "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                },
+                {
+                    "name": "Stop",
+                    "feather": "Square",
+                    "primary": False,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["stop"],
+                    "style": {"bottom": "0.46rem", "right": "6rem"}
+                }]
+            )
+
+            # Always sync state with editor content
+            if response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
+                 st.session_state.sql_code = response_dict_sql['text']
+
+            if response_dict_sql['type'] == "submit" and len(response_dict_sql['text']) != 0:
+                res, error = run_sql(response_dict_sql['text'], df)
+
+                st.markdown("**Results:**")
+                if res is not None:
+                    st.dataframe(res)
+                if error:
+                    st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
 
         # Helper to manage cells
         def add_cell(cell_type, index):
