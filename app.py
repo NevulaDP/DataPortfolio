@@ -8,6 +8,7 @@ import os
 import traceback
 import matplotlib.pyplot as plt
 import seaborn as sns
+import ast
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -134,7 +135,7 @@ def run_python(code, df):
     try:
         SafeExecutor.validate(code)
     except SecurityError as e:
-        return None, str(e), []
+        return None, str(e), [], None
 
     # Capture stdout
     output_buffer = io.StringIO()
@@ -151,10 +152,25 @@ def run_python(code, df):
 
     figures = []
     error_message = None
+    last_value = None
 
     try:
         with contextlib.redirect_stdout(output_buffer):
-            exec(code, {}, local_scope)
+            # Parse code to check for last expression
+            tree = ast.parse(code)
+            if tree.body and isinstance(tree.body[-1], ast.Expr):
+                # Separate last expression
+                last_expr = tree.body.pop()
+                # Compile and run the preamble
+                if tree.body:
+                    exec_code = compile(tree, filename="<string>", mode="exec")
+                    exec(exec_code, {}, local_scope)
+
+                # Compile and eval the last expression
+                eval_code = compile(ast.Expression(last_expr.value), filename="<string>", mode="eval")
+                last_value = eval(eval_code, {}, local_scope)
+            else:
+                exec(code, {}, local_scope)
 
         # Check for open figures
         if plt.get_fignums():
@@ -165,7 +181,7 @@ def run_python(code, df):
     except Exception:
         error_message = traceback.format_exc()
 
-    return output_buffer.getvalue(), error_message, figures
+    return output_buffer.getvalue(), error_message, figures, last_value
 
 # --- UI Components ---
 
@@ -276,6 +292,7 @@ def render_workspace():
             # Python Editor with advanced options
             response_dict_py = code_editor(
                 st.session_state.python_code,
+                key="python_editor",
                 lang="python",
                 height=600,
                 theme="dawn",
@@ -297,22 +314,41 @@ def render_workspace():
                     "alwaysOn": True,
                     "commands": ["submit"],
                     "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                },
+                {
+                    "name": "Stop",
+                    "feather": "Square",
+                    "primary": False,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["stop"],
+                    "style": {"bottom": "0.46rem", "right": "6rem"}
                 }]
             )
+
+            # Debugging
 
             # Always sync state with editor content
             if response_dict_py['text'] != st.session_state.python_code and response_dict_py['text']:
                  st.session_state.python_code = response_dict_py['text']
 
             if response_dict_py['type'] == "submit" and len(response_dict_py['text']) != 0:
-                output, error, figs = run_python(response_dict_py['text'], df)
+                output, error, figs, last_value = run_python(response_dict_py['text'], df)
 
                 # Console Output
                 st.markdown("**Console Output:**")
                 if output:
                     st.markdown(f'<div class="console-output">{output}</div>', unsafe_allow_html=True)
-                elif not error:
+                elif not error and last_value is None:
                      st.markdown(f'<div class="console-output" style="color: #888;">No textual output</div>', unsafe_allow_html=True)
+
+                # Display Last Value (REPL style)
+                if last_value is not None:
+                    st.markdown("**Result:**")
+                    if isinstance(last_value, (pd.DataFrame, pd.Series)):
+                        st.dataframe(last_value)
+                    else:
+                        st.write(last_value)
 
                 # Error Output
                 if error:
@@ -326,12 +362,18 @@ def render_workspace():
                         st.pyplot(fig)
                         plt.close(fig) # Cleanup
 
+            elif response_dict_py['type'] == "stop":
+                # Clear output by doing nothing (since output rendering is inside the submit block)
+                # But to be explicit and perhaps handle persistence if I add it later:
+                pass
+
         with tab_sql:
             st.markdown("Table name is `dataset`.")
 
             # SQL Editor
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
+                key="sql_editor",
                 lang="sql",
                 height=600,
                 theme="dawn",
@@ -348,6 +390,15 @@ def render_workspace():
                     "alwaysOn": True,
                     "commands": ["submit"],
                     "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                },
+                {
+                    "name": "Stop",
+                    "feather": "Square",
+                    "primary": False,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["stop"],
+                    "style": {"bottom": "0.46rem", "right": "6rem"}
                 }]
             )
 
@@ -363,6 +414,10 @@ def render_workspace():
                     st.dataframe(res)
                 if error:
                     st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
+
+            elif response_dict_sql['type'] == "stop":
+                pass
+
             elif response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
                  st.session_state.sql_code = response_dict_sql['text']
 
