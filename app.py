@@ -283,15 +283,9 @@ def render_workspace():
             st.dataframe(df.head())
 
         # Editors
-        editor_mode = st.radio(
-            "Editor Mode",
-            ["🐍 Python Analysis", "💾 SQL Query"],
-            horizontal=True,
-            label_visibility="collapsed",
-            key="editor_mode_radio"
-        )
+        tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
 
-        if editor_mode == "🐍 Python Analysis":
+        with tab_python:
             st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
             st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures.")
 
