@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import ast
 import uuid
+import nbformat as nbf
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -29,12 +30,14 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'python_code' not in st.session_state:
     st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())\n\n# Plotting example\n# plt.figure(figsize=(10, 6))\n# sns.histplot(df['amount'])\n# plt.show()"
-if 'notebook_cells' not in st.session_state:
-    st.session_state.notebook_cells = [
-        {"id": str(uuid.uuid4()), "type": "code", "content": st.session_state.python_code}
-    ]
-if 'cell_outputs' not in st.session_state:
-    st.session_state.cell_outputs = {}
+
+if 'notebook' not in st.session_state:
+    st.session_state.notebook = nbf.v4.new_notebook()
+    # Add initial cell if empty
+    initial_cell = nbf.v4.new_code_cell(source=st.session_state.python_code)
+    initial_cell['id'] = str(uuid.uuid4()) # nbformat cells have IDs
+    st.session_state.notebook.cells.append(initial_cell)
+
 if 'sql_code' not in st.session_state:
     st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
 if 'api_key' not in st.session_state:
@@ -224,11 +227,6 @@ def render_sidebar():
 
         st.divider()
 
-        # Data Preview in Sidebar
-        if st.session_state.project:
-            with st.expander("Data Preview (First 5 rows)"):
-                st.dataframe(st.session_state.project['data'].head())
-
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
     st.markdown("""
@@ -282,9 +280,39 @@ def render_workspace():
             chat_container.chat_message("user").write(prompt)
 
             # Prepare context including code
+            # Serialize notebook cells to JSON for full context
+            notebook_context = []
+            for cell in st.session_state.notebook.cells:
+                # Lightweight copy for context
+                # nbformat nodes are dict-like
+                ctx_cell = {
+                    "cell_type": cell.cell_type,
+                    "source": cell.source,
+                    "outputs": []
+                }
+                # Summarize outputs (avoid passing heavy objects like figures)
+                for out in cell.get("outputs", []):
+                    if out.output_type == "stream":
+                        ctx_cell["outputs"].append({"output_type": "stream", "text": out.text})
+                    elif out.output_type == "error":
+                         ctx_cell["outputs"].append({"output_type": "error", "evalue": out.evalue})
+                    elif out.output_type == "execute_result":
+                        # Check transient object first
+                        val = None
+                        if 'transient' in out and 'obj' in out['transient']:
+                            val = out['transient']['obj']
+
+                        if isinstance(val, (pd.DataFrame, pd.Series)):
+                             ctx_cell["outputs"].append({"output_type": "execute_result", "data": {"text/plain": "Dataframe/Series Object"}})
+                        else:
+                             # Fallback to stored text/plain
+                             text_rep = out.data.get('text/plain', 'Result')
+                             ctx_cell["outputs"].append({"output_type": "execute_result", "data": {"text/plain": text_rep}})
+
+                notebook_context.append(ctx_cell)
+
             code_context = {
-                "python": st.session_state.python_code,
-                "sql": st.session_state.sql_code
+                "notebook": notebook_context
             }
 
             # Generate response
@@ -303,6 +331,11 @@ def render_workspace():
     with col_work:
         st.title(f"Workspace")
 
+        # Data Preview
+        if st.session_state.project:
+            with st.expander("Data Preview (First 5 rows)", expanded=False):
+                st.dataframe(st.session_state.project['data'].head())
+
         st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
         st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. You can add text cells to document your work.")
 
@@ -319,29 +352,47 @@ def render_workspace():
 
         # Helper to manage cells
         def add_cell(cell_type, index):
-            new_cell = {"id": str(uuid.uuid4()), "type": cell_type, "content": ""}
-            st.session_state.notebook_cells.insert(index + 1, new_cell)
+            if cell_type == 'code':
+                new_cell = nbf.v4.new_code_cell(source="")
+            elif cell_type == 'markdown':
+                new_cell = nbf.v4.new_markdown_cell(source="")
+            elif cell_type == 'sql':
+                # nbformat doesn't have 'sql' type, use 'code' with metadata
+                new_cell = nbf.v4.new_code_cell(source="")
+                new_cell.metadata['tags'] = ['sql']
+                # Or just treat it as code but rendered differently in UI
+
+            # Manually ensure ID is set (nbf.v4 usually does, but we want our specific UUID if needed,
+            # though nbformat uses 8-char hashes usually. Let's use our UUID to be safe with React keys)
+            new_cell['id'] = str(uuid.uuid4())
+
+            # Special handling for our custom 'sql' type if we want to differentiate strictly
+            # For now, let's keep the internal logic using 'cell_type' from nbformat,
+            # but we might need to store 'sql' in metadata or just use 'code'.
+            # User wants "SQL Cell". A SQL cell is just a code cell with SQL magic or executed by SQL engine.
+            # To keep UI logic simple, let's abuse cell_type for internal state if needed,
+            # OR stick to 'code' and check metadata.
+            # Let's use a custom field in metadata for 'language'.
+            if cell_type == 'sql':
+                new_cell.metadata['language'] = 'sql'
+
+            st.session_state.notebook.cells.insert(index + 1, new_cell)
 
         def delete_cell(index):
-            if len(st.session_state.notebook_cells) > 1:
-                st.session_state.notebook_cells.pop(index)
+            if len(st.session_state.notebook.cells) > 1:
+                st.session_state.notebook.cells.pop(index)
             else:
                 st.error("Cannot delete the last cell.")
 
-        # Deduplicate cells by ID (failsafe)
-        unique_cells = []
-        seen_ids = set()
-        for cell in st.session_state.notebook_cells:
-            if cell['id'] not in seen_ids:
-                seen_ids.add(cell['id'])
-                unique_cells.append(cell)
-
-        if len(unique_cells) != len(st.session_state.notebook_cells):
-             st.session_state.notebook_cells = unique_cells
-
         # Iterate through cells
-        for i, cell in enumerate(st.session_state.notebook_cells):
+        # We need to handle potential 'nbformat.NotebookNode' which behaves like dict
+        for i, cell in enumerate(st.session_state.notebook.cells):
             cell_id = cell['id']
+
+            # Determine UI type
+            ui_type = cell.cell_type
+            if ui_type == 'code' and cell.metadata.get('language') == 'sql':
+                ui_type = 'sql'
 
             # Use st.container(border=True) for a card-like look
             with st.container(border=True):
@@ -349,16 +400,16 @@ def render_workspace():
                 col_header = st.columns([1, 15, 1])
                 with col_header[0]:
                     # Icon only
-                    if cell['type'] == 'code':
+                    if ui_type == 'code':
                         st.write("🐍")
-                    elif cell['type'] == 'sql':
+                    elif ui_type == 'sql':
                         st.write("💾")
                     else:
                         st.write("📝")
 
                 # Middle column for any extra controls (like toggle for markdown)
                 with col_header[1]:
-                    if cell['type'] == 'markdown':
+                    if ui_type == 'markdown':
                         # View toggle
                         view_mode = st.toggle("Preview", key=f"view_toggle_{cell_id}")
                     else:
@@ -368,16 +419,16 @@ def render_workspace():
                      st.button("🗑️", key=f"del_{cell_id}", on_click=delete_cell, args=(i,), help="Delete this cell", type="tertiary")
 
                 # --- PYTHON CELL ---
-                if cell['type'] == 'code':
+                if ui_type == 'code':
                     editor_key = f"editor_{cell_id}"
 
                     # Sync logic
                     if editor_key in st.session_state and st.session_state[editor_key]:
                             if "text" in st.session_state[editor_key]:
-                                cell['content'] = st.session_state[editor_key]["text"]
+                                cell['source'] = st.session_state[editor_key]["text"]
 
                     response_dict = code_editor(
-                        cell['content'],
+                        cell['source'],
                         key=editor_key,
                         lang="python",
                         height=200,
@@ -410,54 +461,73 @@ def render_workspace():
                     )
 
                     # Update content
-                    if response_dict['text'] != cell['content']:
-                        cell['content'] = response_dict['text']
+                    if response_dict['text'] != cell['source']:
+                        cell['source'] = response_dict['text']
 
                     # Handle Execution
                     if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
                         output, error, figs, last_value = run_python(response_dict['text'], df, st.session_state.notebook_scope)
-                        st.session_state.cell_outputs[cell_id] = {
-                            "output": output,
-                            "error": error,
-                            "figs": figs,
-                            "last_value": last_value
-                        }
+
+                        # Structure outputs roughly like nbformat
+                        new_outputs = []
+                        if output:
+                            new_outputs.append(nbf.v4.new_output("stream", name="stdout", text=output))
+
+                        if error:
+                            new_outputs.append(nbf.v4.new_output("error", ename="Error", evalue=error, traceback=[error]))
+
+                        for fig in figs:
+                            # In a real notebook we would base64 encode this.
+                            # For local state, we'll store the object in metadata or a custom field,
+                            # but keeping 'display_data' structure.
+                            # Standard nbformat doesn't support objects, so we need to be careful if we serialize.
+                            # We will add a transient field for the object.
+                            out = nbf.v4.new_output("display_data", data={"image/png": "Placeholder base64"})
+                            out['transient'] = {"figure": fig}
+                            new_outputs.append(out)
+
+                        if last_value is not None:
+                             out = nbf.v4.new_output("execute_result", data={"text/plain": str(last_value)})
+                             out['transient'] = {"obj": last_value}
+                             new_outputs.append(out)
+
+                        cell['outputs'] = new_outputs
+
                     elif response_dict['type'] == "stop":
                         pass
 
                     # Render Output
-                    if cell_id in st.session_state.cell_outputs:
-                        out = st.session_state.cell_outputs[cell_id]
-
-                        if out['output']:
-                            st.markdown(f'<div class="console-output">{out["output"]}</div>', unsafe_allow_html=True)
-
-                        if out['last_value'] is not None:
-                            st.markdown("**Result:**")
-                            if isinstance(out['last_value'], (pd.DataFrame, pd.Series)):
-                                st.dataframe(out['last_value'])
-                            else:
-                                st.write(out['last_value'])
-
-                        if out['error']:
-                            st.markdown(f'<div class="console-output console-error">{out["error"]}</div>', unsafe_allow_html=True)
-
-                        if out['figs']:
-                            for fig in out['figs']:
-                                st.pyplot(fig)
-                                plt.close(fig)
+                    if 'outputs' in cell:
+                        for out in cell['outputs']:
+                            if out.output_type == 'stream':
+                                st.markdown(f'<div class="console-output">{out.text}</div>', unsafe_allow_html=True)
+                            elif out.output_type == 'error':
+                                st.markdown(f'<div class="console-output console-error">{out.evalue}</div>', unsafe_allow_html=True)
+                            elif out.output_type == 'display_data':
+                                if 'transient' in out and 'figure' in out['transient']:
+                                    st.pyplot(out['transient']['figure'])
+                            elif out.output_type == 'execute_result':
+                                if 'transient' in out and 'obj' in out['transient']:
+                                    val = out['transient']['obj']
+                                    st.markdown("**Result:**")
+                                    if isinstance(val, (pd.DataFrame, pd.Series)):
+                                        st.dataframe(val)
+                                    else:
+                                        st.write(val)
+                                else:
+                                    st.write(out.data.get('text/plain', ''))
 
                 # --- SQL CELL ---
-                elif cell['type'] == 'sql':
+                elif ui_type == 'sql':
                     editor_key = f"sql_editor_{cell_id}"
 
                     # Sync logic
                     if editor_key in st.session_state and st.session_state[editor_key]:
                             if "text" in st.session_state[editor_key]:
-                                cell['content'] = st.session_state[editor_key]["text"]
+                                cell['source'] = st.session_state[editor_key]["text"]
 
                     response_dict = code_editor(
-                        cell['content'],
+                        cell['source'],
                         key=editor_key,
                         lang="sql",
                         height=200,
@@ -479,8 +549,8 @@ def render_workspace():
                     )
 
                     # Update content
-                    if response_dict['text'] != cell['content']:
-                        cell['content'] = response_dict['text']
+                    if response_dict['text'] != cell['source']:
+                        cell['source'] = response_dict['text']
 
                     # Handle Execution
                     if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
@@ -488,24 +558,28 @@ def render_workspace():
                         current_df = st.session_state.notebook_scope.get('df', df)
                         res, error = run_sql(response_dict['text'], current_df)
 
-                        st.session_state.cell_outputs[cell_id] = {
-                            "output": None,
-                            "error": error,
-                            "figs": [],
-                            "last_value": res
-                        }
+                        new_outputs = []
+                        if error:
+                             new_outputs.append(nbf.v4.new_output("error", ename="SQLError", evalue=error, traceback=[error]))
+                        if res is not None:
+                             out = nbf.v4.new_output("execute_result", data={"text/html": res.to_html()})
+                             out['transient'] = {"obj": res}
+                             new_outputs.append(out)
+
+                        cell['outputs'] = new_outputs
 
                     # Render Output
-                    if cell_id in st.session_state.cell_outputs:
-                        out = st.session_state.cell_outputs[cell_id]
-                        if out['last_value'] is not None:
-                            st.dataframe(out['last_value'])
-                        if out['error']:
-                            st.markdown(f'<div class="console-output console-error">{out["error"]}</div>', unsafe_allow_html=True)
+                    if 'outputs' in cell:
+                        for out in cell['outputs']:
+                            if out.output_type == 'error':
+                                st.markdown(f'<div class="console-output console-error">{out.evalue}</div>', unsafe_allow_html=True)
+                            elif out.output_type == 'execute_result':
+                                if 'transient' in out and 'obj' in out['transient']:
+                                    st.dataframe(out['transient']['obj'])
 
 
                 # --- MARKDOWN CELL ---
-                elif cell['type'] == 'markdown':
+                elif ui_type == 'markdown':
                     editor_key = f"md_area_{cell_id}"
 
                     # Check the toggle state from the header
@@ -515,26 +589,26 @@ def render_workspace():
                         # Edit Mode
                         val = st.text_area(
                             "Markdown Content",
-                            value=cell['content'],
+                            value=cell['source'],
                             height=None, # Auto height if supported? No, default.
                             key=editor_key,
                             label_visibility="collapsed",
                             placeholder="Type markdown here... (Use # for headers, - for lists)"
                         )
                         # Sync
-                        if val != cell['content']:
-                            cell['content'] = val
+                        if val != cell['source']:
+                            cell['source'] = val
                     else:
                         # Preview Mode
-                        if cell['content']:
-                            st.markdown(cell['content'])
+                        if cell['source']:
+                            st.markdown(cell['source'])
                         else:
                             st.caption("_Empty markdown cell_")
 
         # Global Add Cell Toolbar (Bottom)
         st.markdown("#### Add Cell")
         col_add = st.columns([1, 1, 1, 5])
-        last_idx = len(st.session_state.notebook_cells) - 1
+        last_idx = len(st.session_state.notebook.cells) - 1
 
         # We need a stable key for these main buttons.
         # Since they always add to the end, we can use a static key or one based on total count.
