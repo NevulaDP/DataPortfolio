@@ -289,6 +289,11 @@ def render_workspace():
             st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
             st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures.")
 
+            # Synchronize state with editor content BEFORE initialization to prevent reversion
+            if "python_editor" in st.session_state and st.session_state.python_editor:
+                if "text" in st.session_state.python_editor:
+                    st.session_state.python_code = st.session_state.python_editor["text"]
+
             # Python Editor with advanced options
             response_dict_py = code_editor(
                 st.session_state.python_code,
@@ -369,6 +374,11 @@ def render_workspace():
 
         with tab_sql:
             st.markdown("Table name is `dataset`.")
+
+            # Synchronize state with editor content BEFORE initialization to prevent reversion
+            if "sql_editor" in st.session_state and st.session_state.sql_editor:
+                if "text" in st.session_state.sql_editor:
+                    st.session_state.sql_code = st.session_state.sql_editor["text"]
 
             # SQL Editor
             response_dict_sql = code_editor(
