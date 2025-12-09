@@ -283,15 +283,22 @@ def render_workspace():
             st.dataframe(df.head())
 
         # Editors
-        tab_python, tab_sql = st.tabs(["🐍 Python Analysis", "💾 SQL Query"])
+        editor_mode = st.radio(
+            "Editor Mode",
+            ["🐍 Python Analysis", "💾 SQL Query"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="editor_mode_radio"
+        )
 
-        with tab_python:
+        if editor_mode == "🐍 Python Analysis":
             st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
             st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures.")
 
             # Python Editor with advanced options
             response_dict_py = code_editor(
                 st.session_state.python_code,
+                key="python_editor",
                 lang="python",
                 height=600,
                 theme="dawn",
@@ -372,6 +379,7 @@ def render_workspace():
             # SQL Editor
             response_dict_sql = code_editor(
                 st.session_state.sql_code,
+                key="sql_editor",
                 lang="sql",
                 height=600,
                 theme="dawn",
@@ -388,6 +396,15 @@ def render_workspace():
                     "alwaysOn": True,
                     "commands": ["submit"],
                     "style": {"bottom": "0.46rem", "right": "0.4rem"}
+                },
+                {
+                    "name": "Stop",
+                    "feather": "Square",
+                    "primary": False,
+                    "hasText": True,
+                    "alwaysOn": True,
+                    "commands": ["stop"],
+                    "style": {"bottom": "0.46rem", "right": "6rem"}
                 }]
             )
 
@@ -403,6 +420,10 @@ def render_workspace():
                     st.dataframe(res)
                 if error:
                     st.markdown(f'<div class="console-output console-error">{error}</div>', unsafe_allow_html=True)
+
+            elif response_dict_sql['type'] == "stop":
+                pass
+
             elif response_dict_sql['text'] != st.session_state.sql_code and response_dict_sql['text']:
                  st.session_state.sql_code = response_dict_sql['text']
 
