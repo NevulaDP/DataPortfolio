@@ -1,10 +1,10 @@
-streamlit
-pandas
 faker
 google-generativeai
-python-dotenv
-numpy
-streamlit-code-editor
 matplotlib
-seaborn
 nbformat
+numpy
+pandas
+python-dotenv
+seaborn
+streamlit
+streamlit-code-editor
