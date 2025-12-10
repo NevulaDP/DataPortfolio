@@ -8,3 +8,4 @@ python-dotenv
 seaborn
 streamlit
 streamlit-code-editor
+duckdb
