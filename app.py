@@ -1,16 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import sqlite3
 import io
 import contextlib
 import os
 import traceback
 import matplotlib.pyplot as plt
 import seaborn as sns
-import ast
 import uuid
-import nbformat as nbf
+import ast
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -28,20 +26,12 @@ if 'project' not in st.session_state:
     st.session_state.project = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-if 'python_code' not in st.session_state:
-    st.session_state.python_code = "# Calculate summary statistics\nprint(df.describe())\n\n# Plotting example\n# plt.figure(figsize=(10, 6))\n# sns.histplot(df['amount'])\n# plt.show()"
-
-if 'notebook' not in st.session_state:
-    st.session_state.notebook = nbf.v4.new_notebook()
-    # Add initial cell if empty
-    initial_cell = nbf.v4.new_code_cell(source=st.session_state.python_code)
-    initial_cell['id'] = str(uuid.uuid4()) # nbformat cells have IDs
-    st.session_state.notebook.cells.append(initial_cell)
-
-if 'sql_code' not in st.session_state:
-    st.session_state.sql_code = "SELECT * FROM dataset LIMIT 10"
 if 'api_key' not in st.session_state:
     st.session_state.api_key = os.getenv("GEMINI_API_KEY", "")
+if 'notebook_cells' not in st.session_state:
+    st.session_state.notebook_cells = []
+if 'notebook_scope' not in st.session_state:
+    st.session_state.notebook_scope = {}
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -53,27 +43,6 @@ st.markdown("""
         padding-top: 2rem;
         padding-bottom: 2rem;
     }
-    .console-output {
-        font-family: 'Courier New', Courier, monospace;
-        background-color: #0e1117;
-        color: #fafafa;
-        padding: 10px;
-        border-radius: 5px;
-        white-space: pre-wrap;
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    .console-error {
-        color: #ff4b4b;
-    }
-    /* Fix for dropdown cropping: set overflow visible on Ace containers */
-    .ace_editor, .ace_editor * {
-        overflow: visible !important;
-    }
-    .ace_autocomplete {
-        z-index: 99999 !important;
-    }
-    /* Better styling for scenario box */
     .scenario-box {
         background-color: #1e1e1e;
         color: #e0e0e0;
@@ -93,6 +62,100 @@ st.markdown("""
 
 # --- Functions ---
 
+def init_notebook_state():
+    # Initialize scope with common libraries and data
+    st.session_state.notebook_scope = {
+        'pd': pd,
+        'np': np,
+        'plt': plt,
+        'sns': sns,
+        'st': st,
+        'df': st.session_state.get('project_data')
+    }
+
+    # Initial Cells
+    if not st.session_state.notebook_cells:
+        st.session_state.notebook_cells = [
+            {
+                "id": str(uuid.uuid4()),
+                "type": "markdown",
+                "content": "### Data Loading\nThe dataset has been pre-loaded into the variable `df`. Run the cell below to inspect it."
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "code",
+                "content": "# The last expression in a cell is displayed automatically.\ndf.head()",
+                "output": "",
+                "result": None
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "type": "markdown",
+                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()` (note: `st` commands clear on rerun, returning the object is safer)."
+            }
+        ]
+
+def execute_cell(cell_idx):
+    cell = st.session_state.notebook_cells[cell_idx]
+    code = cell['content']
+
+    try:
+        SafeExecutor.validate(code)
+    except SecurityError as e:
+        st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
+        st.session_state.notebook_cells[cell_idx]['result'] = None
+        return
+
+    output_buffer = io.StringIO()
+    result_obj = None
+
+    try:
+        with contextlib.redirect_stdout(output_buffer):
+            # Parse code to handle last expression
+            try:
+                tree = ast.parse(code)
+            except SyntaxError:
+                # If syntax error, just let exec fail
+                exec(code, st.session_state.notebook_scope)
+                tree = None
+
+            if tree and tree.body:
+                last_node = tree.body[-1]
+                if isinstance(last_node, ast.Expr):
+                    # Compile and exec everything before the last expression
+                    if len(tree.body) > 1:
+                        module = ast.Module(body=tree.body[:-1], type_ignores=[])
+                        exec(compile(module, filename="<string>", mode="exec"), st.session_state.notebook_scope)
+
+                    # Eval the last expression
+                    expr = ast.Expression(body=last_node.value)
+                    result_obj = eval(compile(expr, filename="<string>", mode="eval"), st.session_state.notebook_scope)
+                else:
+                    # No expression at end, just exec all
+                    exec(code, st.session_state.notebook_scope)
+            elif tree is None:
+                pass # Already executed in except block
+            else:
+                # Empty code
+                pass
+
+        st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
+        st.session_state.notebook_cells[cell_idx]['result'] = result_obj
+
+    except Exception as e:
+        st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}"
+        st.session_state.notebook_cells[cell_idx]['result'] = None
+
+def add_cell(cell_type):
+    new_cell = {
+        "id": str(uuid.uuid4()),
+        "type": cell_type,
+        "content": "",
+        "output": "",
+        "result": None
+    }
+    st.session_state.notebook_cells.append(new_cell)
+
 def generate_project():
     if not st.session_state.sector_input:
         st.error("Please enter a sector.")
@@ -105,13 +168,10 @@ def generate_project():
                 st.session_state.api_key
             )
 
-            # Check for error in definition (e.g. 404 from LLM)
             if "error" in definition:
                 st.error(definition["error"])
                 return
 
-            # Use the new 'recipe' key for generation
-            # Pass explicit rows=10000 per requirement
             if 'recipe' in definition:
                 df = project_generator.generate_dataset(definition['recipe'], rows=10000)
             else:
@@ -122,7 +182,12 @@ def generate_project():
                 "definition": definition,
                 "data": df
             }
-            # Initialize chat with a welcome message
+
+            # Put data in global session state and scope
+            st.session_state['project_data'] = df
+            init_notebook_state()
+
+            # Initialize chat
             st.session_state.messages = [{
                 "role": "assistant",
                 "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
@@ -131,89 +196,12 @@ def generate_project():
             st.error(f"Error generating project: {e}")
             traceback.print_exc()
 
-def run_sql(query, df):
-    try:
-        conn = sqlite3.connect(':memory:')
-        df.to_sql('dataset', conn, index=False, if_exists='replace')
-        result = pd.read_sql_query(query, conn)
-        return result, None
-    except Exception as e:
-        return None, str(e)
-
-def run_python(code, df, scope=None):
-    # Security Check
-    try:
-        SafeExecutor.validate(code)
-    except SecurityError as e:
-        return None, str(e), [], None
-
-    # Capture stdout
-    output_buffer = io.StringIO()
-
-    # Context for execution: Provide pandas, numpy, seaborn, matplotlib, etc.
-    # If scope is provided, use it. Otherwise, create a new one.
-    if scope is not None:
-        local_scope = scope
-        # Ensure df and st are up to date
-        local_scope.update({
-            "df": df,
-            "pd": pd,
-            "np": np,
-            "plt": plt,
-            "sns": sns,
-            "st": st
-        })
-    else:
-        local_scope = {
-            "df": df,
-            "pd": pd,
-            "np": np,
-            "plt": plt,
-            "sns": sns,
-            "st": st
-        }
-
-    figures = []
-    error_message = None
-    last_value = None
-
-    try:
-        with contextlib.redirect_stdout(output_buffer):
-            # Parse code to check for last expression
-            tree = ast.parse(code)
-            if tree.body and isinstance(tree.body[-1], ast.Expr):
-                # Separate last expression
-                last_expr = tree.body.pop()
-                # Compile and run the preamble
-                if tree.body:
-                    exec_code = compile(tree, filename="<string>", mode="exec")
-                    exec(exec_code, local_scope)
-
-                # Compile and eval the last expression
-                eval_code = compile(ast.Expression(last_expr.value), filename="<string>", mode="eval")
-                last_value = eval(eval_code, local_scope)
-            else:
-                exec(code, local_scope)
-
-        # Check for open figures
-        if plt.get_fignums():
-            fignums = plt.get_fignums()
-            for i in fignums:
-                figures.append(plt.figure(i))
-
-    except Exception:
-        error_message = traceback.format_exc()
-
-    return output_buffer.getvalue(), error_message, figures, last_value
-
 # --- UI Components ---
 
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
-
-        # API Key Input
-        st.text_input(
+        val = st.text_input(
             "Gemini API Key",
             type="password",
             help="Enter your Google Gemini API Key. It is used only for this session and not stored.",
@@ -221,7 +209,7 @@ def render_sidebar():
         )
 
         if st.session_state.api_key:
-            st.success("API Key configured for this session.")
+            st.success("API Key configured.")
         else:
             st.warning("No API Key set. Using Mock Mode.")
 
@@ -233,7 +221,7 @@ def render_landing():
     Welcome! This tool helps you build a data analytics portfolio by generating realistic projects.
 
     1. **Pick a Sector**: We'll generate a scenario and a messy, realistic dataset.
-    2. **Analyze**: Use the built-in SQL and Python editors to explore the data.
+    2. **Analyze**: Use the built-in Jupyter Notebook to explore the data.
     3. **Get Mentorship**: A built-in AI mentor will guide you through the analysis.
     """)
 
@@ -243,13 +231,11 @@ def render_landing():
 def render_workspace():
     project = st.session_state.project
     definition = project['definition']
-    df = project['data']
 
-    # Split layout: Left (Context) vs Right (Work)
     col_context, col_work = st.columns([1, 2], gap="large")
 
+    # --- Chat & Context (Left Column) ---
     with col_context:
-        # Improved Scenario UI
         st.markdown(f"""
         <div class="scenario-box">
             <div class="scenario-title">{definition['title']}</div>
@@ -269,358 +255,110 @@ def render_workspace():
         st.divider()
         st.header("💬 Mentor Chat")
 
-        # Chat History
         chat_container = st.container(height=400)
         for msg in st.session_state.messages:
             chat_container.chat_message(msg["role"]).write(msg["content"])
 
-        # Chat Input
         if prompt := st.chat_input("Ask for help..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             chat_container.chat_message("user").write(prompt)
 
-            # Prepare context including code
-            # Serialize notebook cells to JSON for full context
+            # Build Context from Notebook Cells
             notebook_context = []
-            for cell in st.session_state.notebook.cells:
-                # Lightweight copy for context
-                # nbformat nodes are dict-like
-                ctx_cell = {
-                    "cell_type": cell.cell_type,
-                    "source": cell.source,
-                    "outputs": []
-                }
-                # Summarize outputs (avoid passing heavy objects like figures)
-                for out in cell.get("outputs", []):
-                    if out.output_type == "stream":
-                        ctx_cell["outputs"].append({"output_type": "stream", "text": out.text})
-                    elif out.output_type == "error":
-                         ctx_cell["outputs"].append({"output_type": "error", "evalue": out.evalue})
-                    elif out.output_type == "execute_result":
-                        # Check transient object first
-                        val = None
-                        if 'transient' in out and 'obj' in out['transient']:
-                            val = out['transient']['obj']
+            for cell in st.session_state.notebook_cells:
+                notebook_context.append({
+                    "cell_type": cell['type'],
+                    "source": cell['content'],
+                    "output": cell.get('output', '')
+                })
 
-                        if isinstance(val, (pd.DataFrame, pd.Series)):
-                             ctx_cell["outputs"].append({"output_type": "execute_result", "data": {"text/plain": "Dataframe/Series Object"}})
-                        else:
-                             # Fallback to stored text/plain
-                             text_rep = out.data.get('text/plain', 'Result')
-                             ctx_cell["outputs"].append({"output_type": "execute_result", "data": {"text/plain": text_rep}})
+            code_context = {"notebook": notebook_context}
 
-                notebook_context.append(ctx_cell)
-
-            code_context = {
-                "notebook": notebook_context
-            }
-
-            # Generate response
-            # Use gemma-3-27b-it via LLMService
-            response = llm_service.generate_text(
-                prompt=prompt,
-                api_key=st.session_state.api_key,
-                project_context=definition,
-                code_context=code_context,
-                history=st.session_state.messages[:-1]
-            )
-
+            with st.spinner("Thinking..."):
+                response = llm_service.generate_text(
+                    prompt=prompt,
+                    api_key=st.session_state.api_key,
+                    project_context=definition,
+                    code_context=code_context,
+                    history=st.session_state.messages[:-1]
+                )
             st.session_state.messages.append({"role": "assistant", "content": response})
-            chat_container.chat_message("assistant").write(response)
+            st.rerun()
 
+    # --- Notebook (Right Column) ---
     with col_work:
-        st.title(f"Workspace")
+        st.title("Workspace")
 
-        # Data Preview
-        if st.session_state.project:
-            with st.expander("Data Preview (First 5 rows)", expanded=False):
-                st.dataframe(st.session_state.project['data'].head())
+        # Toolbar
+        col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+        with col_btn1:
+            if st.button("+ Code", use_container_width=True):
+                add_cell("code")
+                st.rerun()
+        with col_btn2:
+            if st.button("+ Text", use_container_width=True):
+                add_cell("markdown")
+                st.rerun()
 
-        st.markdown("Use `df` to access the dataset. Available: `pd`, `np`, `plt`, `sns`.")
-        st.info("💡 Tip: Use `plt.show()` or `plt.plot()` to render figures. You can add text cells to document your work.")
+        st.divider()
 
-        # Notebook State Initialization
-        if 'notebook_scope' not in st.session_state:
-            st.session_state.notebook_scope = {
-                "df": df,
-                "pd": pd,
-                "np": np,
-                "plt": plt,
-                "sns": sns,
-                "st": st
-            }
+        # Render Cells
+        for idx, cell in enumerate(st.session_state.notebook_cells):
+            # Unique key for each cell component
+            cell_key = f"cell_{cell['id']}"
 
-        # Helper to manage cells
-        def add_cell(cell_type, index):
-            if cell_type == 'code':
-                new_cell = nbf.v4.new_code_cell(source="")
-            elif cell_type == 'markdown':
-                new_cell = nbf.v4.new_markdown_cell(source="")
-            elif cell_type == 'sql':
-                # nbformat doesn't have 'sql' type, use 'code' with metadata
-                new_cell = nbf.v4.new_code_cell(source="")
-                new_cell.metadata['tags'] = ['sql']
-                # Or just treat it as code but rendered differently in UI
-
-            # Manually ensure ID is set (nbf.v4 usually does, but we want our specific UUID if needed,
-            # though nbformat uses 8-char hashes usually. Let's use our UUID to be safe with React keys)
-            new_cell['id'] = str(uuid.uuid4())
-
-            # Special handling for our custom 'sql' type if we want to differentiate strictly
-            # For now, let's keep the internal logic using 'cell_type' from nbformat,
-            # but we might need to store 'sql' in metadata or just use 'code'.
-            # User wants "SQL Cell". A SQL cell is just a code cell with SQL magic or executed by SQL engine.
-            # To keep UI logic simple, let's abuse cell_type for internal state if needed,
-            # OR stick to 'code' and check metadata.
-            # Let's use a custom field in metadata for 'language'.
-            if cell_type == 'sql':
-                new_cell.metadata['language'] = 'sql'
-
-            st.session_state.notebook.cells.insert(index + 1, new_cell)
-
-        def delete_cell(index):
-            if len(st.session_state.notebook.cells) > 1:
-                st.session_state.notebook.cells.pop(index)
-            else:
-                st.error("Cannot delete the last cell.")
-
-        # Iterate through cells
-        # We need to handle potential 'nbformat.NotebookNode' which behaves like dict
-        for i, cell in enumerate(st.session_state.notebook.cells):
-            cell_id = cell['id']
-
-            # Determine UI type
-            ui_type = cell.cell_type
-            if ui_type == 'code' and cell.metadata.get('language') == 'sql':
-                ui_type = 'sql'
-
-            # Use st.container(border=True) for a card-like look
-            with st.container(border=True):
-                # Header Row: Minimal
-                col_header = st.columns([1, 15, 1])
-                with col_header[0]:
-                    # Icon only
-                    if ui_type == 'code':
-                        st.write("🐍")
-                    elif ui_type == 'sql':
-                        st.write("💾")
+            if cell['type'] == 'markdown':
+                # Tabbed interface for Markdown: View vs Edit
+                tab_view, tab_edit = st.tabs(["Preview", "Edit"])
+                with tab_view:
+                    if cell['content'].strip():
+                        st.markdown(cell['content'])
                     else:
-                        st.write("📝")
+                        st.info("Empty Markdown Cell")
+                with tab_edit:
+                    new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
+                    if new_content != cell['content']:
+                        st.session_state.notebook_cells[idx]['content'] = new_content
 
-                # Middle column for any extra controls (like toggle for markdown)
-                with col_header[1]:
-                    if ui_type == 'markdown':
-                        # View toggle
-                        view_mode = st.toggle("Preview", key=f"view_toggle_{cell_id}")
-                    else:
-                        st.empty()
-
-                with col_header[2]:
-                     st.button("🗑️", key=f"del_{cell_id}", on_click=delete_cell, args=(i,), help="Delete this cell", type="tertiary")
-
-                # --- PYTHON CELL ---
-                if ui_type == 'code':
-                    editor_key = f"editor_{cell_id}"
-
-                    # Sync logic
-                    if editor_key in st.session_state and st.session_state[editor_key]:
-                            if "text" in st.session_state[editor_key]:
-                                cell['source'] = st.session_state[editor_key]["text"]
-
-                    response_dict = code_editor(
-                        cell['source'],
-                        key=editor_key,
+            elif cell['type'] == 'code':
+                with st.container(border=True):
+                    # Editor
+                    response = code_editor(
+                        cell['content'],
                         lang="python",
-                        height=200,
-                        theme="dawn",
-                        options={
-                            "showLineNumbers": True,
-                            "wrap": True,
-                            "autoScrollEditorIntoView": False,
-                            "fontSize": 14,
-                            "fontFamily": "monospace"
-                        },
+                        key=f"ce_{cell_key}",
+                        height=150,
                         buttons=[{
                             "name": "Run",
                             "feather": "Play",
                             "primary": True,
                             "hasText": True,
-                            "alwaysOn": True,
+                            "showWithIcon": True,
                             "commands": ["submit"],
-                            "style": {"bottom": "0.46rem", "right": "0.4rem"}
-                        },
-                        {
-                            "name": "Stop",
-                            "feather": "Square",
-                            "primary": False,
-                            "hasText": True,
-                            "alwaysOn": True,
-                            "commands": ["stop"],
-                            "style": {"bottom": "0.46rem", "right": "6rem"}
+                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
                         }]
                     )
 
-                    # Update content
-                    if response_dict['text'] != cell['source']:
-                        cell['source'] = response_dict['text']
+                    # Check for execution trigger
+                    if response['type'] == "submit" and response['text'] != "":
+                        # Update content
+                        st.session_state.notebook_cells[idx]['content'] = response['text']
+                        # Execute
+                        execute_cell(idx)
+                        st.rerun()
 
-                    # Handle Execution
-                    if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
-                        output, error, figs, last_value = run_python(response_dict['text'], df, st.session_state.notebook_scope)
+                    # Sync content if changed without run
+                    if response['text'] != cell['content']:
+                         st.session_state.notebook_cells[idx]['content'] = response['text']
 
-                        # Structure outputs roughly like nbformat
-                        new_outputs = []
-                        if output:
-                            new_outputs.append(nbf.v4.new_output("stream", name="stdout", text=output))
+                    # Output Display
+                    if cell.get('output'):
+                        st.caption("Output:")
+                        st.text(cell['output'])
 
-                        if error:
-                            new_outputs.append(nbf.v4.new_output("error", ename="Error", evalue=error, traceback=[error]))
-
-                        for fig in figs:
-                            # In a real notebook we would base64 encode this.
-                            # For local state, we'll store the object in metadata or a custom field,
-                            # but keeping 'display_data' structure.
-                            # Standard nbformat doesn't support objects, so we need to be careful if we serialize.
-                            # We will add a transient field for the object.
-                            out = nbf.v4.new_output("display_data", data={"image/png": "Placeholder base64"})
-                            out['transient'] = {"figure": fig}
-                            new_outputs.append(out)
-
-                        if last_value is not None:
-                             out = nbf.v4.new_output("execute_result", data={"text/plain": str(last_value)})
-                             out['transient'] = {"obj": last_value}
-                             new_outputs.append(out)
-
-                        cell['outputs'] = new_outputs
-
-                    elif response_dict['type'] == "stop":
-                        pass
-
-                    # Render Output
-                    if 'outputs' in cell:
-                        for out in cell['outputs']:
-                            if out.output_type == 'stream':
-                                st.markdown(f'<div class="console-output">{out.text}</div>', unsafe_allow_html=True)
-                            elif out.output_type == 'error':
-                                st.markdown(f'<div class="console-output console-error">{out.evalue}</div>', unsafe_allow_html=True)
-                            elif out.output_type == 'display_data':
-                                if 'transient' in out and 'figure' in out['transient']:
-                                    st.pyplot(out['transient']['figure'])
-                            elif out.output_type == 'execute_result':
-                                if 'transient' in out and 'obj' in out['transient']:
-                                    val = out['transient']['obj']
-                                    st.markdown("**Result:**")
-                                    if isinstance(val, (pd.DataFrame, pd.Series)):
-                                        st.dataframe(val)
-                                    else:
-                                        st.write(val)
-                                else:
-                                    st.write(out.data.get('text/plain', ''))
-
-                # --- SQL CELL ---
-                elif ui_type == 'sql':
-                    editor_key = f"sql_editor_{cell_id}"
-
-                    # Sync logic
-                    if editor_key in st.session_state and st.session_state[editor_key]:
-                            if "text" in st.session_state[editor_key]:
-                                cell['source'] = st.session_state[editor_key]["text"]
-
-                    response_dict = code_editor(
-                        cell['source'],
-                        key=editor_key,
-                        lang="sql",
-                        height=200,
-                        theme="dawn",
-                        options={
-                            "showLineNumbers": True,
-                            "wrap": True,
-                            "fontSize": 14,
-                        },
-                        buttons=[{
-                            "name": "Run",
-                            "feather": "Play",
-                            "primary": True,
-                            "hasText": True,
-                            "alwaysOn": True,
-                            "commands": ["submit"],
-                            "style": {"bottom": "0.46rem", "right": "0.4rem"}
-                        }]
-                    )
-
-                    # Update content
-                    if response_dict['text'] != cell['source']:
-                        cell['source'] = response_dict['text']
-
-                    # Handle Execution
-                    if response_dict['type'] == "submit" and len(response_dict['text']) != 0:
-                        # Use the dataframe from the current scope
-                        current_df = st.session_state.notebook_scope.get('df', df)
-                        res, error = run_sql(response_dict['text'], current_df)
-
-                        new_outputs = []
-                        if error:
-                             new_outputs.append(nbf.v4.new_output("error", ename="SQLError", evalue=error, traceback=[error]))
-                        if res is not None:
-                             out = nbf.v4.new_output("execute_result", data={"text/html": res.to_html()})
-                             out['transient'] = {"obj": res}
-                             new_outputs.append(out)
-
-                        cell['outputs'] = new_outputs
-
-                    # Render Output
-                    if 'outputs' in cell:
-                        for out in cell['outputs']:
-                            if out.output_type == 'error':
-                                st.markdown(f'<div class="console-output console-error">{out.evalue}</div>', unsafe_allow_html=True)
-                            elif out.output_type == 'execute_result':
-                                if 'transient' in out and 'obj' in out['transient']:
-                                    st.dataframe(out['transient']['obj'])
-
-
-                # --- MARKDOWN CELL ---
-                elif ui_type == 'markdown':
-                    editor_key = f"md_area_{cell_id}"
-
-                    # Check the toggle state from the header
-                    is_preview = st.session_state.get(f"view_toggle_{cell_id}", False)
-
-                    if not is_preview:
-                        # Edit Mode
-                        val = st.text_area(
-                            "Markdown Content",
-                            value=cell['source'],
-                            height=None, # Auto height if supported? No, default.
-                            key=editor_key,
-                            label_visibility="collapsed",
-                            placeholder="Type markdown here... (Use # for headers, - for lists)"
-                        )
-                        # Sync
-                        if val != cell['source']:
-                            cell['source'] = val
-                    else:
-                        # Preview Mode
-                        if cell['source']:
-                            st.markdown(cell['source'])
-                        else:
-                            st.caption("_Empty markdown cell_")
-
-        # Global Add Cell Toolbar (Bottom)
-        st.markdown("#### Add Cell")
-        col_add = st.columns([1, 1, 1, 5])
-        last_idx = len(st.session_state.notebook.cells) - 1
-
-        # We need a stable key for these main buttons.
-        # Since they always add to the end, we can use a static key or one based on total count.
-        # But 'add_cell' function takes an 'index' to insert *after*.
-        # To add to the end, we pass the last index.
-
-        with col_add[0]:
-             st.button("🐍 Python", key="add_py_bottom", on_click=add_cell, args=("code", last_idx), type="secondary")
-        with col_add[1]:
-             st.button("💾 SQL", key="add_sql_bottom", on_click=add_cell, args=("sql", last_idx), type="secondary")
-        with col_add[2]:
-             st.button("📝 Text", key="add_text_bottom", on_click=add_cell, args=("markdown", last_idx), type="secondary")
+                    # Result Object Display
+                    if cell.get('result') is not None:
+                        st.write(cell['result'])
 
 # --- Main App Logic ---
 
