@@ -79,11 +79,29 @@ class LLMService:
             # Construct context string from code
             code_str = ""
             if code_context:
-                code_str = "\n\n--- User's Current Code ---\n"
+                code_str = "\n\n--- User's Current Notebook ---\n"
+
+                # Handle Notebook List Format
+                if code_context.get("notebook"):
+                    for idx, cell in enumerate(code_context["notebook"]):
+                        c_type = cell.get('cell_type', 'unknown').upper()
+                        content = cell.get('source', '').strip()
+                        output = str(cell.get('output', '')).strip()
+
+                        code_str += f"Cell {idx+1} [{c_type}]:\n{content}\n"
+                        if output:
+                            # Truncate output if it's too long to avoid token limits
+                            if len(output) > 500:
+                                output = output[:500] + "...(truncated)"
+                            code_str += f"Output:\n{output}\n"
+                        code_str += "\n"
+
+                # Fallback for legacy keys (if any)
                 if code_context.get("python"):
                     code_str += f"Python IDE:\n{code_context['python']}\n\n"
                 if code_context.get("sql"):
                     code_str += f"SQL IDE:\n{code_context['sql']}\n"
+
                 code_str += "---------------------------\n"
 
             # Construct conversation history string

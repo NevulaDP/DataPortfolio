@@ -226,8 +226,73 @@ def generate_project():
 
 # --- UI Components ---
 
+def get_completions():
+    completions = []
+
+    # 1. Scope Variables
+    scope = st.session_state.get('notebook_scope', {})
+    for var_name, var_val in scope.items():
+        if var_name.startswith('_'): continue
+        meta_type = type(var_val).__name__
+
+        # Add variable itself
+        completions.append({
+            "caption": var_name,
+            "value": var_name,
+            "meta": meta_type,
+            "score": 1000
+        })
+
+        # If it's a dataframe, add columns
+        if isinstance(var_val, pd.DataFrame):
+            for col in var_val.columns:
+                col_str = str(col)
+                # Add as string literal (useful for df['...'])
+                completions.append({
+                    "caption": col_str,
+                    "value": f"'{col_str}'",
+                    "meta": "column",
+                    "score": 900
+                })
+                # Add as attribute if valid identifier
+                if col_str.isidentifier():
+                     completions.append({
+                        "caption": col_str,
+                        "value": col_str,
+                        "meta": "column",
+                        "score": 800
+                    })
+
+    # 3. Common Methods (Static list for standard libraries)
+    # This helps users with common pandas/numpy/plotting operations
+    common_methods = [
+        # Pandas
+        "head", "tail", "describe", "info", "columns", "index", "dtypes",
+        "shape", "groupby", "merge", "concat", "pivot_table", "plot",
+        "value_counts", "sort_values", "fillna", "dropna", "apply", "map",
+        "read_csv", "to_csv",
+        # Numpy
+        "array", "arange", "linspace", "mean", "sum", "std", "min", "max",
+        # Matplotlib/Seaborn
+        "figure", "title", "xlabel", "ylabel", "show", "scatterplot",
+        "lineplot", "barplot", "histplot", "boxplot", "heatmap"
+    ]
+
+    for method in common_methods:
+        completions.append({
+            "caption": method,
+            "value": method,
+            "meta": "method",
+            "score": 500
+        })
+
+    return completions
+
 @st.fragment
 def render_notebook():
+    # Get current completions
+    completions = get_completions()
+
     # Toolbar
     col_btn1, col_btn2, col_btn3, _ = st.columns([1, 1, 1, 3])
     with col_btn1:
@@ -266,7 +331,17 @@ def render_notebook():
                     cell['content'],
                     lang="python",
                     key=f"ce_{cell_key}",
-                    height=150,
+                    height=200,
+                    options={
+                        "displayIndentGuides": True,
+                        "highlightActiveLine": True,
+                        "wrap": True,
+                        "enableLiveAutocompletion": True,
+                        "enableBasicAutocompletion": True,
+                        "enableSnippets": True,
+                        "scrollPastEnd": 0.5, # Helps with bottom clipping by allowing scroll
+                    },
+                    completions=completions,
                     buttons=[{
                         "name": "Run",
                         "feather": "Play",
@@ -304,7 +379,11 @@ def render_notebook():
                     cell['content'],
                     lang="sql",
                     key=f"ce_{cell_key}",
-                    height=150,
+                    height=200,
+                    options={
+                        "wrap": True,
+                        "scrollPastEnd": 0.5,
+                    },
                     buttons=[{
                         "name": "Run",
                         "feather": "Play",
