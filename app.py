@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import uuid
 import ast
-import sqlite3
-import streamlit.components.v1 as components
+import duckdb
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -34,8 +33,6 @@ if 'notebook_cells' not in st.session_state:
     st.session_state.notebook_cells = []
 if 'notebook_scope' not in st.session_state:
     st.session_state.notebook_scope = {}
-if 'sql_query' not in st.session_state:
-    st.session_state.sql_query = "SELECT * FROM data LIMIT 10;"
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -102,53 +99,80 @@ def init_notebook_state():
 def execute_cell(cell_idx):
     cell = st.session_state.notebook_cells[cell_idx]
     code = cell['content']
+    cell_type = cell['type']
 
-    try:
-        SafeExecutor.validate(code)
-    except SecurityError as e:
-        st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
-        st.session_state.notebook_cells[cell_idx]['result'] = None
-        return
+    if cell_type == 'code':
+        try:
+            SafeExecutor.validate(code)
+        except SecurityError as e:
+            st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
+            st.session_state.notebook_cells[cell_idx]['result'] = None
+            return
 
-    output_buffer = io.StringIO()
-    result_obj = None
+        output_buffer = io.StringIO()
+        result_obj = None
 
-    try:
-        with contextlib.redirect_stdout(output_buffer):
-            # Parse code to handle last expression
-            try:
-                tree = ast.parse(code)
-            except SyntaxError:
-                # If syntax error, just let exec fail
-                exec(code, st.session_state.notebook_scope)
-                tree = None
-
-            if tree and tree.body:
-                last_node = tree.body[-1]
-                if isinstance(last_node, ast.Expr):
-                    # Compile and exec everything before the last expression
-                    if len(tree.body) > 1:
-                        module = ast.Module(body=tree.body[:-1], type_ignores=[])
-                        exec(compile(module, filename="<string>", mode="exec"), st.session_state.notebook_scope)
-
-                    # Eval the last expression
-                    expr = ast.Expression(body=last_node.value)
-                    result_obj = eval(compile(expr, filename="<string>", mode="eval"), st.session_state.notebook_scope)
-                else:
-                    # No expression at end, just exec all
+        try:
+            with contextlib.redirect_stdout(output_buffer):
+                # Parse code to handle last expression
+                try:
+                    tree = ast.parse(code)
+                except SyntaxError:
+                    # If syntax error, just let exec fail
                     exec(code, st.session_state.notebook_scope)
-            elif tree is None:
-                pass # Already executed in except block
+                    tree = None
+
+                if tree and tree.body:
+                    last_node = tree.body[-1]
+                    if isinstance(last_node, ast.Expr):
+                        # Compile and exec everything before the last expression
+                        if len(tree.body) > 1:
+                            module = ast.Module(body=tree.body[:-1], type_ignores=[])
+                            exec(compile(module, filename="<string>", mode="exec"), st.session_state.notebook_scope)
+
+                        # Eval the last expression
+                        expr = ast.Expression(body=last_node.value)
+                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), st.session_state.notebook_scope)
+                    else:
+                        # No expression at end, just exec all
+                        exec(code, st.session_state.notebook_scope)
+                elif tree is None:
+                    pass # Already executed in except block
+                else:
+                    # Empty code
+                    pass
+
+            st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
+            st.session_state.notebook_cells[cell_idx]['result'] = result_obj
+
+        except Exception as e:
+            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}"
+            st.session_state.notebook_cells[cell_idx]['result'] = None
+
+    elif cell_type == 'sql':
+        try:
+            # Connect to DuckDB
+            con = duckdb.connect()
+
+            # Register the dataframe if it exists
+            df = st.session_state.get('project_data')
+            if df is not None:
+                # Register as both 'df' and 'data' for convenience
+                con.register('df', df)
+                con.register('data', df)
+
+                try:
+                    # Execute Query and return as DataFrame
+                    result_df = con.execute(code).df()
+                    st.session_state.notebook_cells[cell_idx]['result'] = result_df
+                    st.session_state.notebook_cells[cell_idx]['output'] = ""
+                except Exception as e:
+                    st.session_state.notebook_cells[cell_idx]['output'] = f"SQL Error: {e}"
+                    st.session_state.notebook_cells[cell_idx]['result'] = None
             else:
-                # Empty code
-                pass
-
-        st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
-        st.session_state.notebook_cells[cell_idx]['result'] = result_obj
-
-    except Exception as e:
-        st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}"
-        st.session_state.notebook_cells[cell_idx]['result'] = None
+                 st.session_state.notebook_cells[cell_idx]['output'] = "No dataset available."
+        except Exception as e:
+             st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
 
 def add_cell(cell_type):
     new_cell = {
@@ -204,14 +228,15 @@ def generate_project():
 
 @st.fragment
 def render_notebook():
-    st.caption("Integrated Python Notebook")
-
     # Toolbar
-    col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+    col_btn1, col_btn2, col_btn3, _ = st.columns([1, 1, 1, 3])
     with col_btn1:
         if st.button("+ Code", use_container_width=True):
             add_cell("code")
     with col_btn2:
+        if st.button("+ SQL", use_container_width=True):
+            add_cell("sql")
+    with col_btn3:
         if st.button("+ Text", use_container_width=True):
             add_cell("markdown")
 
@@ -235,6 +260,7 @@ def render_notebook():
 
         elif cell['type'] == 'code':
             with st.container(border=True):
+                st.caption("Python")
                 # Editor
                 response = code_editor(
                     cell['content'],
@@ -270,56 +296,43 @@ def render_notebook():
                 if cell.get('result') is not None:
                     st.write(cell['result'])
 
-@st.fragment
-def render_sql():
-    st.caption("Integrated SQL Interface")
+        elif cell['type'] == 'sql':
+            with st.container(border=True):
+                st.caption("SQL (DuckDB)")
+                # Editor
+                response = code_editor(
+                    cell['content'],
+                    lang="sql",
+                    key=f"ce_{cell_key}",
+                    height=150,
+                    buttons=[{
+                        "name": "Run",
+                        "feather": "Play",
+                        "primary": True,
+                        "hasText": True,
+                        "showWithIcon": True,
+                        "commands": ["submit"],
+                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                    }]
+                )
 
-    df = st.session_state.get('project_data')
-    if df is None:
-        st.error("No data available.")
-        return
+                # Check for execution trigger
+                if response['type'] == "submit" and response['text'] != "":
+                    st.session_state.notebook_cells[idx]['content'] = response['text']
+                    execute_cell(idx)
 
-    # SQL Editor
-    query = st.session_state.get('sql_query', 'SELECT * FROM data LIMIT 10;')
+                # Sync content
+                if response['text'] != cell['content']:
+                     st.session_state.notebook_cells[idx]['content'] = response['text']
 
-    response = code_editor(
-        query,
-        lang="sql",
-        height=150,
-        key="sql_editor",
-        buttons=[{
-            "name": "Run Query",
-            "feather": "Play",
-            "primary": True,
-            "hasText": True,
-            "showWithIcon": True,
-            "commands": ["submit"],
-            "style": {"bottom": "0.44rem", "right": "0.4rem"}
-        }]
-    )
+                # Output Display
+                if cell.get('output'):
+                    st.caption("Error:")
+                    st.error(cell['output'])
 
-    if response['text'] != "":
-        st.session_state.sql_query = response['text']
-
-    if response['type'] == "submit":
-        # Execute Query
-        try:
-            conn = sqlite3.connect(':memory:')
-            df.to_sql('data', conn, index=False, if_exists='replace')
-            result = pd.read_sql_query(response['text'], conn)
-            st.write(result)
-            conn.close()
-        except Exception as e:
-            st.error(f"SQL Error: {e}")
-
-def render_jupyterlite():
-    st.caption("External JupyterLite Environment")
-    st.warning("⚠️ This environment runs purely in your browser. It CANNOT access the project variables (like `df`) or the AI Mentor context directly. To use the project data, download the CSV above and upload it here.")
-
-    components.iframe(
-        "https://jupyterlite.github.io/demo/repl/index.html?kernel=python&toolbar=1",
-        height=700
-    )
+                # Result Object Display
+                if cell.get('result') is not None:
+                    st.dataframe(cell['result'])
 
 def render_sidebar():
     with st.sidebar:
@@ -409,7 +422,7 @@ def render_workspace():
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
 
-    # --- Notebook & SQL & JupyterLite (Right Column) ---
+    # --- Notebook (Right Column) ---
     with col_work:
         c1, c2 = st.columns([3, 1])
         with c1:
@@ -419,16 +432,7 @@ def render_workspace():
                 csv = df.to_csv(index=False).encode('utf-8')
                 st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
 
-        tab_py, tab_sql, tab_lite = st.tabs(["Integrated Notebook", "SQL", "JupyterLite"])
-
-        with tab_py:
-            render_notebook()
-
-        with tab_sql:
-            render_sql()
-
-        with tab_lite:
-            render_jupyterlite()
+        render_notebook()
 
 # --- Main App Logic ---
 
