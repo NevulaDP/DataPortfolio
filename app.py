@@ -10,6 +10,7 @@ import seaborn as sns
 import uuid
 import ast
 import sqlite3
+import streamlit.components.v1 as components
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -203,14 +204,13 @@ def generate_project():
 
 @st.fragment
 def render_notebook():
-    st.caption("Python Notebook (Runs independently)")
+    st.caption("Integrated Python Notebook")
 
     # Toolbar
     col_btn1, col_btn2, _ = st.columns([1, 1, 4])
     with col_btn1:
         if st.button("+ Code", use_container_width=True):
             add_cell("code")
-            # No st.rerun() needed in fragment, automatic update
     with col_btn2:
         if st.button("+ Text", use_container_width=True):
             add_cell("markdown")
@@ -256,7 +256,6 @@ def render_notebook():
                 if response['type'] == "submit" and response['text'] != "":
                     st.session_state.notebook_cells[idx]['content'] = response['text']
                     execute_cell(idx)
-                    # No st.rerun(), output renders below immediately if state updated
 
                 # Sync content
                 if response['text'] != cell['content']:
@@ -273,7 +272,7 @@ def render_notebook():
 
 @st.fragment
 def render_sql():
-    st.caption("SQL Interface (Runs independently)")
+    st.caption("Integrated SQL Interface")
 
     df = st.session_state.get('project_data')
     if df is None:
@@ -313,6 +312,15 @@ def render_sql():
         except Exception as e:
             st.error(f"SQL Error: {e}")
 
+def render_jupyterlite():
+    st.caption("External JupyterLite Environment")
+    st.warning("⚠️ This environment runs purely in your browser. It CANNOT access the project variables (like `df`) or the AI Mentor context directly. To use the project data, download the CSV above and upload it here.")
+
+    components.iframe(
+        "https://jupyterlite.github.io/demo/repl/index.html?kernel=python&toolbar=1",
+        height=700
+    )
+
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
@@ -346,6 +354,7 @@ def render_landing():
 def render_workspace():
     project = st.session_state.project
     definition = project['definition']
+    df = st.session_state.get('project_data')
 
     col_context, col_work = st.columns([1, 2], gap="large")
 
@@ -400,17 +409,26 @@ def render_workspace():
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
 
-    # --- Notebook & SQL (Right Column) ---
+    # --- Notebook & SQL & JupyterLite (Right Column) ---
     with col_work:
-        st.title("Workspace")
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.title("Workspace")
+        with c2:
+            if df is not None:
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
 
-        tab_py, tab_sql = st.tabs(["Python", "SQL"])
+        tab_py, tab_sql, tab_lite = st.tabs(["Integrated Notebook", "SQL", "JupyterLite"])
 
         with tab_py:
             render_notebook()
 
         with tab_sql:
             render_sql()
+
+        with tab_lite:
+            render_jupyterlite()
 
 # --- Main App Logic ---
 
