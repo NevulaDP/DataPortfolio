@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import uuid
 import ast
+import sqlite3
+import streamlit.components.v1 as components
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -32,6 +34,8 @@ if 'notebook_cells' not in st.session_state:
     st.session_state.notebook_cells = []
 if 'notebook_scope' not in st.session_state:
     st.session_state.notebook_scope = {}
+if 'sql_query' not in st.session_state:
+    st.session_state.sql_query = "SELECT * FROM data LIMIT 10;"
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -91,7 +95,7 @@ def init_notebook_state():
             {
                 "id": str(uuid.uuid4()),
                 "type": "markdown",
-                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()` (note: `st` commands clear on rerun, returning the object is safer)."
+                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()`."
             }
         ]
 
@@ -198,6 +202,125 @@ def generate_project():
 
 # --- UI Components ---
 
+@st.fragment
+def render_notebook():
+    st.caption("Integrated Python Notebook")
+
+    # Toolbar
+    col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+    with col_btn1:
+        if st.button("+ Code", use_container_width=True):
+            add_cell("code")
+    with col_btn2:
+        if st.button("+ Text", use_container_width=True):
+            add_cell("markdown")
+
+    st.divider()
+
+    # Render Cells
+    for idx, cell in enumerate(st.session_state.notebook_cells):
+        cell_key = f"cell_{cell['id']}"
+
+        if cell['type'] == 'markdown':
+            tab_view, tab_edit = st.tabs(["Preview", "Edit"])
+            with tab_view:
+                if cell['content'].strip():
+                    st.markdown(cell['content'])
+                else:
+                    st.info("Empty Markdown Cell")
+            with tab_edit:
+                new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
+                if new_content != cell['content']:
+                    st.session_state.notebook_cells[idx]['content'] = new_content
+
+        elif cell['type'] == 'code':
+            with st.container(border=True):
+                # Editor
+                response = code_editor(
+                    cell['content'],
+                    lang="python",
+                    key=f"ce_{cell_key}",
+                    height=150,
+                    buttons=[{
+                        "name": "Run",
+                        "feather": "Play",
+                        "primary": True,
+                        "hasText": True,
+                        "showWithIcon": True,
+                        "commands": ["submit"],
+                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                    }]
+                )
+
+                # Check for execution trigger
+                if response['type'] == "submit" and response['text'] != "":
+                    st.session_state.notebook_cells[idx]['content'] = response['text']
+                    execute_cell(idx)
+
+                # Sync content
+                if response['text'] != cell['content']:
+                     st.session_state.notebook_cells[idx]['content'] = response['text']
+
+                # Output Display
+                if cell.get('output'):
+                    st.caption("Output:")
+                    st.text(cell['output'])
+
+                # Result Object Display
+                if cell.get('result') is not None:
+                    st.write(cell['result'])
+
+@st.fragment
+def render_sql():
+    st.caption("Integrated SQL Interface")
+
+    df = st.session_state.get('project_data')
+    if df is None:
+        st.error("No data available.")
+        return
+
+    # SQL Editor
+    query = st.session_state.get('sql_query', 'SELECT * FROM data LIMIT 10;')
+
+    response = code_editor(
+        query,
+        lang="sql",
+        height=150,
+        key="sql_editor",
+        buttons=[{
+            "name": "Run Query",
+            "feather": "Play",
+            "primary": True,
+            "hasText": True,
+            "showWithIcon": True,
+            "commands": ["submit"],
+            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+        }]
+    )
+
+    if response['text'] != "":
+        st.session_state.sql_query = response['text']
+
+    if response['type'] == "submit":
+        # Execute Query
+        try:
+            conn = sqlite3.connect(':memory:')
+            df.to_sql('data', conn, index=False, if_exists='replace')
+            result = pd.read_sql_query(response['text'], conn)
+            st.write(result)
+            conn.close()
+        except Exception as e:
+            st.error(f"SQL Error: {e}")
+
+def render_jupyterlite():
+    st.caption("External JupyterLite Environment")
+    st.warning("⚠️ This environment runs purely in your browser. It CANNOT access the project variables (like `df`) or the AI Mentor context directly. To use the project data, download the CSV above and upload it here.")
+
+    components.iframe(
+        "https://jupyterlite.github.io/demo/repl/index.html?kernel=python&toolbar=1",
+        height=700
+    )
+
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
@@ -231,6 +354,7 @@ def render_landing():
 def render_workspace():
     project = st.session_state.project
     definition = project['definition']
+    df = st.session_state.get('project_data')
 
     col_context, col_work = st.columns([1, 2], gap="large")
 
@@ -285,80 +409,26 @@ def render_workspace():
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
 
-    # --- Notebook (Right Column) ---
+    # --- Notebook & SQL & JupyterLite (Right Column) ---
     with col_work:
-        st.title("Workspace")
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.title("Workspace")
+        with c2:
+            if df is not None:
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
 
-        # Toolbar
-        col_btn1, col_btn2, _ = st.columns([1, 1, 4])
-        with col_btn1:
-            if st.button("+ Code", use_container_width=True):
-                add_cell("code")
-                st.rerun()
-        with col_btn2:
-            if st.button("+ Text", use_container_width=True):
-                add_cell("markdown")
-                st.rerun()
+        tab_py, tab_sql, tab_lite = st.tabs(["Integrated Notebook", "SQL", "JupyterLite"])
 
-        st.divider()
+        with tab_py:
+            render_notebook()
 
-        # Render Cells
-        for idx, cell in enumerate(st.session_state.notebook_cells):
-            # Unique key for each cell component
-            cell_key = f"cell_{cell['id']}"
+        with tab_sql:
+            render_sql()
 
-            if cell['type'] == 'markdown':
-                # Tabbed interface for Markdown: View vs Edit
-                tab_view, tab_edit = st.tabs(["Preview", "Edit"])
-                with tab_view:
-                    if cell['content'].strip():
-                        st.markdown(cell['content'])
-                    else:
-                        st.info("Empty Markdown Cell")
-                with tab_edit:
-                    new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
-                    if new_content != cell['content']:
-                        st.session_state.notebook_cells[idx]['content'] = new_content
-
-            elif cell['type'] == 'code':
-                with st.container(border=True):
-                    # Editor
-                    response = code_editor(
-                        cell['content'],
-                        lang="python",
-                        key=f"ce_{cell_key}",
-                        height=150,
-                        buttons=[{
-                            "name": "Run",
-                            "feather": "Play",
-                            "primary": True,
-                            "hasText": True,
-                            "showWithIcon": True,
-                            "commands": ["submit"],
-                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                        }]
-                    )
-
-                    # Check for execution trigger
-                    if response['type'] == "submit" and response['text'] != "":
-                        # Update content
-                        st.session_state.notebook_cells[idx]['content'] = response['text']
-                        # Execute
-                        execute_cell(idx)
-                        st.rerun()
-
-                    # Sync content if changed without run
-                    if response['text'] != cell['content']:
-                         st.session_state.notebook_cells[idx]['content'] = response['text']
-
-                    # Output Display
-                    if cell.get('output'):
-                        st.caption("Output:")
-                        st.text(cell['output'])
-
-                    # Result Object Display
-                    if cell.get('result') is not None:
-                        st.write(cell['result'])
+        with tab_lite:
+            render_jupyterlite()
 
 # --- Main App Logic ---
 
