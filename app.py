@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import uuid
 import ast
+import sqlite3
 from code_editor import code_editor
 from services.generator import project_generator
 from services.llm import LLMService
@@ -32,6 +33,8 @@ if 'notebook_cells' not in st.session_state:
     st.session_state.notebook_cells = []
 if 'notebook_scope' not in st.session_state:
     st.session_state.notebook_scope = {}
+if 'sql_query' not in st.session_state:
+    st.session_state.sql_query = "SELECT * FROM data LIMIT 10;"
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -91,7 +94,7 @@ def init_notebook_state():
             {
                 "id": str(uuid.uuid4()),
                 "type": "markdown",
-                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()` (note: `st` commands clear on rerun, returning the object is safer)."
+                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()`."
             }
         ]
 
@@ -198,6 +201,118 @@ def generate_project():
 
 # --- UI Components ---
 
+@st.fragment
+def render_notebook():
+    st.caption("Python Notebook (Runs independently)")
+
+    # Toolbar
+    col_btn1, col_btn2, _ = st.columns([1, 1, 4])
+    with col_btn1:
+        if st.button("+ Code", use_container_width=True):
+            add_cell("code")
+            # No st.rerun() needed in fragment, automatic update
+    with col_btn2:
+        if st.button("+ Text", use_container_width=True):
+            add_cell("markdown")
+
+    st.divider()
+
+    # Render Cells
+    for idx, cell in enumerate(st.session_state.notebook_cells):
+        cell_key = f"cell_{cell['id']}"
+
+        if cell['type'] == 'markdown':
+            tab_view, tab_edit = st.tabs(["Preview", "Edit"])
+            with tab_view:
+                if cell['content'].strip():
+                    st.markdown(cell['content'])
+                else:
+                    st.info("Empty Markdown Cell")
+            with tab_edit:
+                new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
+                if new_content != cell['content']:
+                    st.session_state.notebook_cells[idx]['content'] = new_content
+
+        elif cell['type'] == 'code':
+            with st.container(border=True):
+                # Editor
+                response = code_editor(
+                    cell['content'],
+                    lang="python",
+                    key=f"ce_{cell_key}",
+                    height=150,
+                    buttons=[{
+                        "name": "Run",
+                        "feather": "Play",
+                        "primary": True,
+                        "hasText": True,
+                        "showWithIcon": True,
+                        "commands": ["submit"],
+                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                    }]
+                )
+
+                # Check for execution trigger
+                if response['type'] == "submit" and response['text'] != "":
+                    st.session_state.notebook_cells[idx]['content'] = response['text']
+                    execute_cell(idx)
+                    # No st.rerun(), output renders below immediately if state updated
+
+                # Sync content
+                if response['text'] != cell['content']:
+                     st.session_state.notebook_cells[idx]['content'] = response['text']
+
+                # Output Display
+                if cell.get('output'):
+                    st.caption("Output:")
+                    st.text(cell['output'])
+
+                # Result Object Display
+                if cell.get('result') is not None:
+                    st.write(cell['result'])
+
+@st.fragment
+def render_sql():
+    st.caption("SQL Interface (Runs independently)")
+
+    df = st.session_state.get('project_data')
+    if df is None:
+        st.error("No data available.")
+        return
+
+    # SQL Editor
+    query = st.session_state.get('sql_query', 'SELECT * FROM data LIMIT 10;')
+
+    response = code_editor(
+        query,
+        lang="sql",
+        height=150,
+        key="sql_editor",
+        buttons=[{
+            "name": "Run Query",
+            "feather": "Play",
+            "primary": True,
+            "hasText": True,
+            "showWithIcon": True,
+            "commands": ["submit"],
+            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+        }]
+    )
+
+    if response['text'] != "":
+        st.session_state.sql_query = response['text']
+
+    if response['type'] == "submit":
+        # Execute Query
+        try:
+            conn = sqlite3.connect(':memory:')
+            df.to_sql('data', conn, index=False, if_exists='replace')
+            result = pd.read_sql_query(response['text'], conn)
+            st.write(result)
+            conn.close()
+        except Exception as e:
+            st.error(f"SQL Error: {e}")
+
 def render_sidebar():
     with st.sidebar:
         st.title("Settings")
@@ -285,80 +400,17 @@ def render_workspace():
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.rerun()
 
-    # --- Notebook (Right Column) ---
+    # --- Notebook & SQL (Right Column) ---
     with col_work:
         st.title("Workspace")
 
-        # Toolbar
-        col_btn1, col_btn2, _ = st.columns([1, 1, 4])
-        with col_btn1:
-            if st.button("+ Code", use_container_width=True):
-                add_cell("code")
-                st.rerun()
-        with col_btn2:
-            if st.button("+ Text", use_container_width=True):
-                add_cell("markdown")
-                st.rerun()
+        tab_py, tab_sql = st.tabs(["Python", "SQL"])
 
-        st.divider()
+        with tab_py:
+            render_notebook()
 
-        # Render Cells
-        for idx, cell in enumerate(st.session_state.notebook_cells):
-            # Unique key for each cell component
-            cell_key = f"cell_{cell['id']}"
-
-            if cell['type'] == 'markdown':
-                # Tabbed interface for Markdown: View vs Edit
-                tab_view, tab_edit = st.tabs(["Preview", "Edit"])
-                with tab_view:
-                    if cell['content'].strip():
-                        st.markdown(cell['content'])
-                    else:
-                        st.info("Empty Markdown Cell")
-                with tab_edit:
-                    new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
-                    if new_content != cell['content']:
-                        st.session_state.notebook_cells[idx]['content'] = new_content
-
-            elif cell['type'] == 'code':
-                with st.container(border=True):
-                    # Editor
-                    response = code_editor(
-                        cell['content'],
-                        lang="python",
-                        key=f"ce_{cell_key}",
-                        height=150,
-                        buttons=[{
-                            "name": "Run",
-                            "feather": "Play",
-                            "primary": True,
-                            "hasText": True,
-                            "showWithIcon": True,
-                            "commands": ["submit"],
-                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                        }]
-                    )
-
-                    # Check for execution trigger
-                    if response['type'] == "submit" and response['text'] != "":
-                        # Update content
-                        st.session_state.notebook_cells[idx]['content'] = response['text']
-                        # Execute
-                        execute_cell(idx)
-                        st.rerun()
-
-                    # Sync content if changed without run
-                    if response['text'] != cell['content']:
-                         st.session_state.notebook_cells[idx]['content'] = response['text']
-
-                    # Output Display
-                    if cell.get('output'):
-                        st.caption("Output:")
-                        st.text(cell['output'])
-
-                    # Result Object Display
-                    if cell.get('result') is not None:
-                        st.write(cell['result'])
+        with tab_sql:
+            render_sql()
 
 # --- Main App Logic ---
 
