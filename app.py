@@ -399,10 +399,39 @@ def render_floating_chat():
     project = st.session_state.project
     definition = project['definition']
 
+    # Inject CSS for dynamic positioning and opacity
+    st.markdown("""
+    <style>
+        /* Floating Chat Container Style */
+        div[data-testid="stVerticalBlock"]:has(#chat-window-marker) {
+            width: 400px !important;
+            bottom: 20px !important;
+            z-index: 99999 !important;
+            background-color: var(--secondary-background-color, #f0f2f6) !important; /* Fallback to standard grey */
+            border: 1px solid var(--text-color-20) !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+            position: fixed !important;
+            transition: left 0.3s ease-in-out !important;
+            left: 20px !important; /* Default (Closed Sidebar) */
+            opacity: 1 !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Open Sidebar Override */
+        body:has(section[data-testid="stSidebar"][aria-expanded="true"]) div[data-testid="stVerticalBlock"]:has(#chat-window-marker) {
+            left: 23rem !important; /* Approx 370px (21rem sidebar + 2rem gap) */
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Create a container for the floating chat
     chat_con = st.container()
 
     with chat_con:
+        # Marker for CSS targeting
+        st.markdown('<div id="chat-window-marker"></div>', unsafe_allow_html=True)
+
         # Use an expander to allow collapsing/expanding
         # Defaulting to expanded so the user sees it immediately
         with st.expander("💬 Mentor Chat", expanded=True):
@@ -446,10 +475,9 @@ def render_floating_chat():
                 st.rerun()
 
     # Float the container
-    # Position shifted to 370px to clear sidebar when open
-    # Added explicit background color variable to handle themes/transparency
-    # Added border for visibility
-    chat_con.float("bottom: 20px; left: 370px; width: 400px; z-index: 99999; background-color: var(--secondary-background-color); border: 1px solid var(--text-color-20); border-radius: 10px; padding: 10px;")
+    # We pass minimal CSS here as the heavy lifting is done by the global CSS injection above
+    # using the ID marker. 'position: fixed' ensures it floats.
+    chat_con.float("position: fixed;")
 
 
 @st.fragment
