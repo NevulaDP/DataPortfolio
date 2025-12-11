@@ -331,7 +331,7 @@ def render_notebook():
                     cell['content'],
                     lang="python",
                     key=f"ce_{cell_key}",
-                    height=200,
+                    height=250,
                     options={
                         "displayIndentGuides": True,
                         "highlightActiveLine": True,
@@ -339,6 +339,8 @@ def render_notebook():
                         "enableLiveAutocompletion": True,
                         "enableBasicAutocompletion": True,
                         "enableSnippets": True,
+                        "minLines": 10,
+                        "maxLines": 20,
                         "scrollPastEnd": 0.5, # Helps with bottom clipping by allowing scroll
                     },
                     completions=completions,
