@@ -288,7 +288,8 @@ def generate_project():
             # Pass history to prevent repetition
             history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
-            definition = project_generator.generate_project_definition(
+            # Use the new orchestration method
+            definition = project_generator.orchestrate_project_generation(
                 st.session_state.sector_input,
                 st.session_state.api_key,
                 previous_context=history_context

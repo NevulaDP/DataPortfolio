@@ -12,81 +12,104 @@ chaos = ChaosToolkit()
 llm_service = LLMService()
 
 class ProjectGenerator:
-    def generate_project_definition(self, sector: str, api_key: str = None, previous_context: list = None):
-        # Inject a random seed to force the LLM to diverge from its deterministic path
+    def orchestrate_project_generation(self, sector: str, api_key: str = None, previous_context: list = None):
+        """
+        Orchestrates a 2-step generation process:
+        1. Generate a creative scenario (Narrative).
+        2. Generate a data recipe based on that narrative.
+        """
+        # Step 1: Generate Narrative
+        narrative = self._generate_scenario_narrative(sector, api_key, previous_context)
+        if "error" in narrative:
+            return narrative
+
+        # Step 2: Generate Data Recipe from Narrative
+        full_project = self._generate_data_recipe(narrative, api_key)
+        return full_project
+
+    def _generate_scenario_narrative(self, sector: str, api_key: str, previous_context: list):
         random_seed = random.randint(1, 100000)
 
-        # Construct avoidance string
         avoid_str = ""
         if previous_context:
             avoid_str = "\n**FORBIDDEN TERMS (DO NOT USE):**\n" + ", ".join(previous_context) + "\n(You MUST generate a completely different company and scenario from these.)"
 
         prompt = f"""
-        Act as an expert Data Science Mentor and Creative Writer.
-        Generate a comprehensive and realistic data analysis project scenario for a Junior Data Analyst in the '{sector}' sector.
+        Act as an expert Creative Writer and Data Science Mentor.
+        Create a unique, detailed scenario for a Data Analysis project in the '{sector}' sector.
+
+        **Goal:** Write a compelling backstory for a company facing a specific data problem.
 
         **Entropy Injection:**
         Random Seed: {random_seed}
-        (Use this seed to wildly vary the Company Name, Business Situation, and specific Data Problems. Do not repeat previous outputs.)
         {avoid_str}
 
-        **Creativity Guidelines:**
-        1. **Company & Context:** Invent a unique, realistic company name and a specific, detailed business situation.
-           - Do NOT use generic names like "Company A".
-           - VARY the company stage (Startup vs Enterprise vs Non-profit).
-           - VARY the core problem (e.g., Fraud, Efficiency, Growth, Retention, Logistics).
-        2. **Diversity:** Ensure the scenario is NOT just a standard "Sales Analysis". Dig deep into sector-specific nuances (e.g., for 'AdTech', look at attribution models or bid density; for 'Healthcare', look at patient readmission or bed occupancy).
-        3. **Data Realism:** For the `anchor_entity`, use REAL-WORLD examples specific to the sector.
-           - Bad: "Option A", "Option B"
-           - Good (Automotive): "Tesla Model 3", "Ford F-150", "Toyota Camry"
-           - Good (Retail): "Wireless Headphones", "Running Shoes", "Smart Watch"
-        4. **Correlations:** Ensure the rules for correlated columns reflect logical real-world relationships.
+        **Guidelines:**
+        1. **Company:** Invent a unique name. Do NOT use generic names.
+        2. **Problem:** Be specific. Is it Fraud? Supply Chain? Churn? Ad Spend?
+        3. **Context:** Provide rich details about the situation.
 
-        Output a JSON with the following structure:
+        Output ONLY valid JSON:
         {{
             "title": "Creative Project Title",
-            "description": "Detailed 3-4 sentence scenario description describing the unique business context, the specific company, and the urgent problem to solve.",
-            "tasks": ["List of 3-5 specific, actionable questions for the analyst (e.g., 'Calculate the impact of X on Y')"],
+            "company_name": "Name",
+            "business_problem": "Short description of the core problem",
+            "description": "Detailed 3-4 sentence backstory."
+        }}
+        """
+        return llm_service.generate_json(prompt, api_key, temperature=0.95)
+
+    def _generate_data_recipe(self, narrative: dict, api_key: str):
+        prompt = f"""
+        Act as a Senior Data Architect.
+        You have been given the following project scenario:
+
+        **Title:** {narrative.get('title')}
+        **Company:** {narrative.get('company_name')}
+        **Problem:** {narrative.get('business_problem')}
+        **Description:** {narrative.get('description')}
+
+        **Task:** Design a synthetic dataset schema (recipe) that perfectly matches this scenario.
+
+        **Requirements:**
+        1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction').
+           - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
+        2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
+        3. **Tasks:** Define 3-5 analysis questions solvable with this data.
+
+        Output a JSON merging the scenario and the recipe:
+        {{
+            "title": "{narrative.get('title')}",
+            "description": "{narrative.get('description')}",
+            "tasks": ["List of 3-5 analysis tasks"],
             "recipe": {{
                 "anchor_entity": {{
-                    "name": "Name of the main entity (e.g. 'car_model', 'department', 'subscription_tier')",
-                    "options": ["List", "of", "5-10", "specific", "REAL-WORLD", "examples"],
-                    "weights": [0.1, 0.2, "etc (must sum to 1, length match options)"]
+                    "name": "Name of entity",
+                    "options": ["List", "of", "REAL", "examples"],
+                    "weights": [0.1, 0.2, "etc (sum to 1)"]
                 }},
                 "correlated_columns": [
                     {{
                         "name": "column_name_snake_case",
-                        "type": "numeric",
-                        "description": "Description of the metric",
-                        "rules": {{
-                            "SpecificAnchorOption1": {{"min": 10, "max": 20}},
-                            "SpecificAnchorOption2": {{"min": 50, "max": 100}},
-                            "default": {{"min": 0, "max": 50}}
-                        }}
-                    }},
-                    {{
-                        "name": "another_column_snake_case",
-                        "type": "boolean",
-                        "description": "Description",
-                        "rules": {{
-                            "SpecificAnchorOption1": 0.8, // Probability of True
-                            "SpecificAnchorOption2": 0.2
-                        }}
+                        "type": "numeric/boolean",
+                        "description": "Desc",
+                        "rules": {{ "Option1": {{"min":0, "max":10}} }}
                     }}
                 ],
                 "faker_columns": [
-                    {{"name": "customer_name", "faker_method": "name"}},
-                    {{"name": "date", "faker_method": "date_this_year"}},
-                    {{"name": "email", "faker_method": "email"}},
-                    {{"name": "city", "faker_method": "city"}}
+                    {{"name": "col_name", "faker_method": "name/date_this_year/city/email"}}
                 ]
             }},
             "display_schema": [
-                {{"name": "column_name", "type": "Type", "description": "Short desc"}}
+                {{"name": "col_name", "type": "Type", "description": "Desc"}}
             ]
         }}
         """
-        return llm_service.generate_json(prompt, api_key)
+        return llm_service.generate_json(prompt, api_key, temperature=0.8)
+
+    # Legacy wrapper for compatibility if needed, but we will update app.py
+    def generate_project_definition(self, sector: str, api_key: str = None, previous_context: list = None):
+        return self.orchestrate_project_generation(sector, api_key, previous_context)
 
     def _sanitize_column_name(self, name: str) -> str:
         # Lowercase
