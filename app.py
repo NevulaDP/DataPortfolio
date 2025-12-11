@@ -449,7 +449,7 @@ def render_floating_chat():
     # Position shifted to 370px to clear sidebar when open
     # Added explicit background color variable to handle themes/transparency
     # Added border for visibility
-    chat_con.float("bottom: 20px; left: 370px; width: 400px; z-index: 99999; background-color: var(--secondary-background-color); border: 1px solid var(--text-color-20); border-radius: 10px; padding: 10px;")
+    chat_con.float("bottom: 20px; left: 370px; width: 400px; z-index: 99999; background-color: var(--background-color); border: 1px solid var(--text-color-20); border-radius: 10px; padding: 10px;")
 
 
 @st.fragment
