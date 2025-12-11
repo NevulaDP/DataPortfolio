@@ -144,51 +144,54 @@ class LLMService:
 
     def _mock_response(self, prompt: str) -> dict:
         return {
-            "title": "Mock Project: Sales Analysis (Recipe Mode)",
-            "description": "Analyze the sales data for a retail company. This is a MOCK response generated without an API key.",
-            "tasks": ["Calculate total revenue", "Identify top selling products", "Analyze sales by region"],
+            "title": "Mock Project: Tech & Retail Analysis (Enhanced Mock)",
+            "description": "Analyze sales trends for 'GadgetWorld', a tech retailer facing stagnant growth. This is a MOCK response designed to show realistic data examples.",
+            "tasks": ["Calculate revenue share by Product Model", "Analyze the relationship between Price and Warranty uptake", "Identify refund trends"],
             "recipe": {
                 "anchor_entity": {
-                    "name": "Product Category",
-                    "options": ["Electronics", "Clothing", "Home", "Books"],
-                    "weights": [0.4, 0.3, 0.2, 0.1]
+                    "name": "Product Model",
+                    "options": ["Sony WH-1000XM5", "MacBook Air M2", "Samsung Galaxy S23", "Kindle Paperwhite", "Logitech MX Master 3"],
+                    "weights": [0.2, 0.15, 0.25, 0.2, 0.2]
                 },
                 "correlated_columns": [
                     {
                         "name": "Price",
                         "type": "numeric",
                         "rules": {
-                            "Electronics": {"min": 100, "max": 1000},
-                            "Clothing": {"min": 20, "max": 100},
-                            "Home": {"min": 50, "max": 300},
-                            "Books": {"min": 10, "max": 50},
-                            "default": {"min": 10, "max": 100}
+                            "Sony WH-1000XM5": {"min": 250, "max": 350},
+                            "MacBook Air M2": {"min": 900, "max": 1200},
+                            "Samsung Galaxy S23": {"min": 700, "max": 900},
+                            "Kindle Paperwhite": {"min": 100, "max": 140},
+                            "Logitech MX Master 3": {"min": 80, "max": 100},
+                            "default": {"min": 50, "max": 1000}
                         }
                     },
                     {
-                        "name": "Warranty Extended",
+                        "name": "Warranty Purchased",
                         "type": "boolean",
                         "rules": {
-                            "Electronics": 0.3,
-                            "Clothing": 0.0,
-                            "Home": 0.1,
-                            "Books": 0.0,
-                            "default": 0.1
+                            "Sony WH-1000XM5": 0.2,
+                            "MacBook Air M2": 0.4,
+                            "Samsung Galaxy S23": 0.3,
+                            "Kindle Paperwhite": 0.1,
+                            "Logitech MX Master 3": 0.05
                         }
                     }
                 ],
                 "faker_columns": [
                     {"name": "Transaction ID", "faker_method": "uuid4"},
-                    {"name": "Customer Email", "faker_method": "email"},
-                    {"name": "Date", "faker_method": "date_this_year"}
+                    {"name": "Customer Name", "faker_method": "name"},
+                    {"name": "Purchase Date", "faker_method": "date_this_year"},
+                    {"name": "Store City", "faker_method": "city"}
                 ]
             },
             "display_schema": [
-                {"name": "Product Category", "type": "Categorical", "description": "Main product type"},
-                {"name": "Price", "type": "Numeric", "description": "Item price in USD"},
-                {"name": "Warranty Extended", "type": "Boolean", "description": "If warranty was purchased"},
-                {"name": "Transaction ID", "type": "String", "description": "Unique identifier"},
-                {"name": "Customer Email", "type": "String", "description": "Customer contact"},
-                {"name": "Date", "type": "Date", "description": "Transaction date"}
+                {"name": "Product Model", "type": "Categorical", "description": "Specific product name"},
+                {"name": "Price", "type": "Numeric", "description": "Sales price in USD"},
+                {"name": "Warranty Purchased", "type": "Boolean", "description": "If extended warranty was bought"},
+                {"name": "Transaction ID", "type": "String", "description": "Unique transaction key"},
+                {"name": "Customer Name", "type": "String", "description": "Buyer name"},
+                {"name": "Purchase Date", "type": "Date", "description": "Date of purchase"},
+                {"name": "Store City", "type": "String", "description": "City where store is located"}
             ]
         }
