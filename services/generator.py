@@ -12,9 +12,14 @@ chaos = ChaosToolkit()
 llm_service = LLMService()
 
 class ProjectGenerator:
-    def generate_project_definition(self, sector: str, api_key: str = None):
+    def generate_project_definition(self, sector: str, api_key: str = None, previous_context: list = None):
         # Inject a random seed to force the LLM to diverge from its deterministic path
         random_seed = random.randint(1, 100000)
+
+        # Construct avoidance string
+        avoid_str = ""
+        if previous_context:
+            avoid_str = "\n**FORBIDDEN TERMS (DO NOT USE):**\n" + ", ".join(previous_context) + "\n(You MUST generate a completely different company and scenario from these.)"
 
         prompt = f"""
         Act as an expert Data Science Mentor and Creative Writer.
@@ -23,6 +28,7 @@ class ProjectGenerator:
         **Entropy Injection:**
         Random Seed: {random_seed}
         (Use this seed to wildly vary the Company Name, Business Situation, and specific Data Problems. Do not repeat previous outputs.)
+        {avoid_str}
 
         **Creativity Guidelines:**
         1. **Company & Context:** Invent a unique, realistic company name and a specific, detailed business situation.

@@ -44,6 +44,9 @@ if 'cell_edit_state' not in st.session_state:
 # Track chat processing state
 if 'processing_chat' not in st.session_state:
     st.session_state.processing_chat = False
+# Track history of generated project titles/companies to prevent repetition
+if 'generated_history' not in st.session_state:
+    st.session_state.generated_history = []
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -276,30 +279,28 @@ def delete_cell(index):
         st.rerun()
 
 def generate_project():
-    print(f"DEBUG: Starting project generation for sector: {st.session_state.sector_input}")
     if not st.session_state.sector_input:
         st.error("Please enter a sector.")
         return
 
     with st.spinner(f"Generating synthetic data and scenario for '{st.session_state.sector_input}'..."):
         try:
+            # Pass history to prevent repetition
+            history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
+
             definition = project_generator.generate_project_definition(
                 st.session_state.sector_input,
-                st.session_state.api_key
+                st.session_state.api_key,
+                previous_context=history_context
             )
-            print("DEBUG: Project definition received.")
 
             if "error" in definition:
-                print(f"DEBUG: Error in definition: {definition['error']}")
                 st.error(definition["error"])
                 return
 
             if 'recipe' in definition:
-                print("DEBUG: generating dataset...")
                 df = project_generator.generate_dataset(definition['recipe'], rows=10000)
-                print(f"DEBUG: Dataset generated. Shape: {df.shape}")
             else:
-                print("DEBUG: Invalid recipe format.")
                 st.error("Invalid recipe format received from AI.")
                 return
 
@@ -307,6 +308,10 @@ def generate_project():
                 "definition": definition,
                 "data": df
             }
+
+            # Update history with the new project title and anchor
+            new_history_item = f"{definition.get('title', '')} ({definition.get('recipe', {}).get('anchor_entity', {}).get('name', '')})"
+            st.session_state.generated_history.append(new_history_item)
 
             # Put data in global session state and scope
             st.session_state['project_data'] = df
@@ -317,9 +322,7 @@ def generate_project():
                 "role": "assistant",
                 "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
             }]
-            print("DEBUG: Project setup complete.")
         except Exception as e:
-            print(f"DEBUG: Exception in generate_project: {e}")
             st.error(f"Error generating project: {e}")
             traceback.print_exc()
 
