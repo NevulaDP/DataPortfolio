@@ -44,6 +44,9 @@ if 'cell_edit_state' not in st.session_state:
 # Track chat processing state
 if 'processing_chat' not in st.session_state:
     st.session_state.processing_chat = False
+# Track history of generated project titles/companies to prevent repetition
+if 'generated_history' not in st.session_state:
+    st.session_state.generated_history = []
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -282,9 +285,13 @@ def generate_project():
 
     with st.spinner(f"Generating synthetic data and scenario for '{st.session_state.sector_input}'..."):
         try:
+            # Pass history to prevent repetition
+            history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
+
             definition = project_generator.generate_project_definition(
                 st.session_state.sector_input,
-                st.session_state.api_key
+                st.session_state.api_key,
+                previous_context=history_context
             )
 
             if "error" in definition:
@@ -301,6 +308,10 @@ def generate_project():
                 "definition": definition,
                 "data": df
             }
+
+            # Update history with the new project title and anchor
+            new_history_item = f"{definition.get('title', '')} ({definition.get('recipe', {}).get('anchor_entity', {}).get('name', '')})"
+            st.session_state.generated_history.append(new_history_item)
 
             # Put data in global session state and scope
             st.session_state['project_data'] = df
