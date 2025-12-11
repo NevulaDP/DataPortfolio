@@ -73,11 +73,15 @@ st.markdown("""
         border-radius: 5px;
     }
     /* Chat Container Styling */
-    .floating-chat-container {
-        background-color: #262730;
-        border: 1px solid #464b5d;
-        border-radius: 10px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+    /* Target the floating container specifically if possible, or use general overrides */
+    div[data-testid="stExpander"] {
+        background-color: #2b2b2b;
+        border-radius: 8px;
+    }
+    /* Ensure text input in chat (and generally) is readable */
+    input[type="text"] {
+        color: #ffffff !important;
+        background-color: #444444 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -453,7 +457,7 @@ def render_floating_chat():
                 st.rerun()
 
     # Float the container
-    chat_con.float("bottom: 20px; right: 20px; width: 400px; background-color: #262730; border: 1px solid #4CAF50; border-radius: 10px; z-index: 9999;")
+    chat_con.float("bottom: 20px; left: 20px; width: 400px; background-color: #262730; border: 1px solid #4CAF50; border-radius: 10px; z-index: 9999;")
 
 
 @st.fragment
@@ -507,7 +511,8 @@ def render_notebook():
                             toolbar=[
                                 ['bold', 'italic', 'underline', 'strike'],
                                 ['blockquote', 'code-block'],
-                                [{'header': 1}, {'header': 2}],
+                                [{'size': ['small', False, 'large', 'huge']}],
+                                [{'header': [1, 2, 3, 4, 5, 6, False]}],
                                 [{'list': 'ordered'}, {'list': 'bullet'}],
                                 [{'script': 'sub'}, {'script': 'super'}],
                                 [{'indent': '-1'}, {'indent': '+1'}],
