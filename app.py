@@ -73,24 +73,6 @@ st.markdown("""
         border-radius: 5px;
     }
 
-    /* Dynamic Chat Window Positioning */
-    /* Default (Sidebar Closed) */
-    div:has(#chat-window-marker) {
-        left: 1rem !important;
-        transition: left 0.3s ease-in-out;
-    }
-
-    /* Sidebar Open - Target the specific sidebar state */
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ .main div:has(#chat-window-marker),
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ div div:has(#chat-window-marker) {
-        left: 23rem !important;
-    }
-
-    /* Fallback for when the sidebar structure might differ slightly in some deployments */
-    /* Checking if body has the sidebar open */
-    body:has(section[data-testid="stSidebar"][aria-expanded="true"]) div:has(#chat-window-marker) {
-        left: 23rem !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -422,8 +404,6 @@ def render_floating_chat():
     chat_con = st.container()
 
     with chat_con:
-        # Hidden marker for CSS targeting
-        st.markdown('<div id="chat-window-marker"></div>', unsafe_allow_html=True)
         # Use an expander to allow collapsing/expanding
         # Defaulting to expanded so the user sees it immediately
         with st.expander("💬 Mentor Chat", expanded=True):
@@ -467,9 +447,9 @@ def render_floating_chat():
                 st.rerun()
 
     # Float the container
-    # Position uses CSS variable override (see style block) - default 'left' here acts as fallback/base
+    # Positioned on the right side (independent of sidebar)
     # Uses 'canvas' background to ensure opacity and adaptation to system/browser theme
-    chat_con.float("bottom: 20px; left: 1rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
+    chat_con.float("bottom: 20px; right: 3rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
 
 
 @st.fragment
