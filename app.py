@@ -406,7 +406,7 @@ def render_floating_chat():
         div[data-testid="stVerticalBlock"]:has(#chat-window-marker) {
             width: 400px !important;
             bottom: 20px !important;
-            z-index: 99999 !important;
+            z-index: 99 !important; /* Lower than sidebar (approx 100) but above content */
             background-color: var(--secondary-background-color, #f0f2f6) !important; /* Fallback to standard grey */
             border: 1px solid var(--text-color-20) !important;
             border-radius: 10px !important;
