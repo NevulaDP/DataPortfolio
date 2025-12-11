@@ -11,6 +11,7 @@ import uuid
 import ast
 import duckdb
 from code_editor import code_editor
+from streamlit_quill import st_quill
 from services.generator import project_generator
 from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
@@ -58,6 +59,9 @@ st.markdown("""
         color: #4CAF50;
         margin-bottom: 10px;
     }
+    .stButton button {
+        border-radius: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,7 +84,7 @@ def init_notebook_state():
             {
                 "id": str(uuid.uuid4()),
                 "type": "markdown",
-                "content": "### Data Loading\nThe dataset has been pre-loaded into the variable `df`. Run the cell below to inspect it."
+                "content": "### Data Loading<br>The dataset has been pre-loaded into the variable `df`. Run the cell below to inspect it."
             },
             {
                 "id": str(uuid.uuid4()),
@@ -92,11 +96,14 @@ def init_notebook_state():
             {
                 "id": str(uuid.uuid4()),
                 "type": "markdown",
-                "content": "### Analysis\nPerform your analysis below. To display a plot, return the figure object or use `st.pyplot()`."
+                "content": "### Analysis<br>Perform your analysis below. To display a plot, return the figure object or use `st.pyplot()`."
             }
         ]
 
 def execute_cell(cell_idx):
+    if cell_idx < 0 or cell_idx >= len(st.session_state.notebook_cells):
+        return
+
     cell = st.session_state.notebook_cells[cell_idx]
     code = cell['content']
     cell_type = cell['type']
@@ -174,7 +181,7 @@ def execute_cell(cell_idx):
         except Exception as e:
              st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
 
-def add_cell(cell_type):
+def add_cell(cell_type, index=None):
     new_cell = {
         "id": str(uuid.uuid4()),
         "type": cell_type,
@@ -182,7 +189,15 @@ def add_cell(cell_type):
         "output": "",
         "result": None
     }
-    st.session_state.notebook_cells.append(new_cell)
+    if index is not None and 0 <= index <= len(st.session_state.notebook_cells):
+        st.session_state.notebook_cells.insert(index, new_cell)
+    else:
+        st.session_state.notebook_cells.append(new_cell)
+
+def delete_cell(index):
+    if 0 <= index < len(st.session_state.notebook_cells):
+        st.session_state.notebook_cells.pop(index)
+        st.rerun()
 
 def generate_project():
     if not st.session_state.sector_input:
@@ -328,141 +343,175 @@ def get_sql_completions():
 
     return completions
 
+def render_add_cell_controls(index):
+    """Renders a discreet add button that opens a popover to select cell type."""
+    # Using a container and centering logic to make it look nice
+    c1, c2, c3 = st.columns([5, 1, 5])
+    with c2:
+        with st.popover("➕", use_container_width=True):
+            if st.button("Python", key=f"add_py_{index}", use_container_width=True):
+                add_cell("code", index)
+                st.rerun()
+            if st.button("SQL", key=f"add_sql_{index}", use_container_width=True):
+                add_cell("sql", index)
+                st.rerun()
+            if st.button("Text", key=f"add_txt_{index}", use_container_width=True):
+                add_cell("markdown", index)
+                st.rerun()
+
 @st.fragment
 def render_notebook():
     # Get current completions
     py_completions = get_python_completions()
     sql_completions = get_sql_completions()
 
-    # Toolbar
-    col_btn1, col_btn2, col_btn3, _ = st.columns([1, 1, 1, 3])
-    with col_btn1:
-        if st.button("+ Code", use_container_width=True):
-            add_cell("code")
-    with col_btn2:
-        if st.button("+ SQL", use_container_width=True):
-            add_cell("sql")
-    with col_btn3:
-        if st.button("+ Text", use_container_width=True):
-            add_cell("markdown")
-
-    st.divider()
+    # Add Control at top
+    render_add_cell_controls(0)
 
     # Render Cells
     for idx, cell in enumerate(st.session_state.notebook_cells):
         cell_key = f"cell_{cell['id']}"
 
-        if cell['type'] == 'markdown':
-            tab_view, tab_edit = st.tabs(["Preview", "Edit"])
-            with tab_view:
-                if cell['content'].strip():
-                    st.markdown(cell['content'])
-                else:
-                    st.info("Empty Markdown Cell")
-            with tab_edit:
-                new_content = st.text_area("Markdown Content", value=cell['content'], key=f"md_{cell_key}", height=150)
-                if new_content != cell['content']:
-                    st.session_state.notebook_cells[idx]['content'] = new_content
+        # Determine container styling based on type
+        # We wrap the whole cell in a container
+        with st.container(border=True):
+            # Top Bar: Label and Delete Button
+            col_lbl, col_del = st.columns([1, 0.05])
+            with col_del:
+                if st.button("🗑️", key=f"del_{cell_key}", help="Delete Cell"):
+                    delete_cell(idx)
 
-        elif cell['type'] == 'code':
-            with st.container(border=True):
-                st.caption("Python")
-                # Editor
-                response = code_editor(
-                    cell['content'],
-                    lang="python",
-                    key=f"ce_{cell_key}",
-                    height=250,
-                    options={
-                        "displayIndentGuides": True,
-                        "highlightActiveLine": True,
-                        "wrap": True,
-                        "enableLiveAutocompletion": True,
-                        "enableBasicAutocompletion": True,
-                        "enableSnippets": True,
-                        "minLines": 10,
-                        "maxLines": 20,
-                        "scrollPastEnd": 0.5, # Helps with bottom clipping by allowing scroll
-                    },
-                    completions=py_completions,
-                    buttons=[{
-                        "name": "Run",
-                        "feather": "Play",
-                        "primary": True,
-                        "hasText": True,
-                        "showWithIcon": True,
-                        "commands": ["submit"],
-                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                    }]
-                )
+            with col_lbl:
+                if cell['type'] == 'markdown':
+                    st.caption("Text / Markdown")
+                    # Rich Text Editor
+                    # Note: st_quill content sync is slightly different than text_area
+                    content = st_quill(
+                        value=cell['content'],
+                        placeholder="Write your analysis here...",
+                        html=True,
+                        key=f"quill_{cell_key}",
+                        toolbar=[
+                            ['bold', 'italic', 'underline', 'strike'],        # toggled buttons
+                            ['blockquote', 'code-block'],
+                            [{'header': 1}, {'header': 2}],               # custom button values
+                            [{'list': 'ordered'}, {'list': 'bullet'}],
+                            [{'script': 'sub'}, {'script': 'super'}],      # superscript/subscript
+                            [{'indent': '-1'}, {'indent': '+1'}],          # outdent/indent
+                            [{'direction': 'rtl'}],                         # text direction
+                            [{'color': []}, {'background': []}],          # dropdown with defaults from theme
+                            [{'align': []}],
+                            ['clean']                                         # remove formatting button
+                        ]
+                    )
 
-                # Check for execution trigger
-                if response['type'] == "submit" and response['text'] != "":
-                    st.session_state.notebook_cells[idx]['content'] = response['text']
-                    execute_cell(idx)
+                    # Sync content if changed
+                    # Quill updates on blur or periodically, need to check if content changed
+                    if content != cell['content']:
+                        st.session_state.notebook_cells[idx]['content'] = content
 
-                # Sync content
-                if response['text'] != cell['content']:
-                     st.session_state.notebook_cells[idx]['content'] = response['text']
+                elif cell['type'] == 'code':
+                    st.caption("Python")
+                    # Editor
+                    response = code_editor(
+                        cell['content'],
+                        lang="python",
+                        key=f"ce_{cell_key}",
+                        height=250,
+                        options={
+                            "displayIndentGuides": True,
+                            "highlightActiveLine": True,
+                            "wrap": True,
+                            "enableLiveAutocompletion": True,
+                            "enableBasicAutocompletion": True,
+                            "enableSnippets": True,
+                            "minLines": 10,
+                            "maxLines": 20,
+                            "scrollPastEnd": 0.5,
+                        },
+                        completions=py_completions,
+                        buttons=[{
+                            "name": "Run",
+                            "feather": "Play",
+                            "primary": True,
+                            "hasText": True,
+                            "showWithIcon": True,
+                            "commands": ["submit"],
+                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                        }]
+                    )
 
-                # Output Display
-                if cell.get('output'):
-                    st.caption("Output:")
-                    st.text(cell['output'])
+                    # Check for execution trigger
+                    if response['type'] == "submit" and response['text'] != "":
+                        st.session_state.notebook_cells[idx]['content'] = response['text']
+                        execute_cell(idx)
 
-                # Result Object Display
-                if cell.get('result') is not None:
-                    st.write(cell['result'])
+                    # Sync content
+                    if response['text'] != cell['content']:
+                         st.session_state.notebook_cells[idx]['content'] = response['text']
 
-        elif cell['type'] == 'sql':
-            with st.container(border=True):
-                st.caption("SQL (DuckDB)")
-                # Editor
-                response = code_editor(
-                    cell['content'],
-                    lang="sql",
-                    key=f"ce_{cell_key}",
-                    height=250,
-                    options={
-                        "displayIndentGuides": True,
-                        "highlightActiveLine": True,
-                        "wrap": True,
-                        "enableLiveAutocompletion": True,
-                        "enableBasicAutocompletion": True,
-                        "enableSnippets": True,
-                        "minLines": 10,
-                        "maxLines": 20,
-                        "scrollPastEnd": 0.5,
-                    },
-                    completions=sql_completions,
-                    buttons=[{
-                        "name": "Run",
-                        "feather": "Play",
-                        "primary": True,
-                        "hasText": True,
-                        "showWithIcon": True,
-                        "commands": ["submit"],
-                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                    }]
-                )
+                    # Output Display
+                    if cell.get('output'):
+                        st.divider()
+                        st.caption("Output:")
+                        st.text(cell['output'])
 
-                # Check for execution trigger
-                if response['type'] == "submit" and response['text'] != "":
-                    st.session_state.notebook_cells[idx]['content'] = response['text']
-                    execute_cell(idx)
+                    # Result Object Display
+                    if cell.get('result') is not None:
+                        st.write(cell['result'])
 
-                # Sync content
-                if response['text'] != cell['content']:
-                     st.session_state.notebook_cells[idx]['content'] = response['text']
+                elif cell['type'] == 'sql':
+                    st.caption("SQL (DuckDB)")
+                    # Editor
+                    response = code_editor(
+                        cell['content'],
+                        lang="sql",
+                        key=f"ce_{cell_key}",
+                        height=250,
+                        options={
+                            "displayIndentGuides": True,
+                            "highlightActiveLine": True,
+                            "wrap": True,
+                            "enableLiveAutocompletion": True,
+                            "enableBasicAutocompletion": True,
+                            "enableSnippets": True,
+                            "minLines": 10,
+                            "maxLines": 20,
+                            "scrollPastEnd": 0.5,
+                        },
+                        completions=sql_completions,
+                        buttons=[{
+                            "name": "Run",
+                            "feather": "Play",
+                            "primary": True,
+                            "hasText": True,
+                            "showWithIcon": True,
+                            "commands": ["submit"],
+                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                        }]
+                    )
 
-                # Output Display
-                if cell.get('output'):
-                    st.caption("Error:")
-                    st.error(cell['output'])
+                    # Check for execution trigger
+                    if response['type'] == "submit" and response['text'] != "":
+                        st.session_state.notebook_cells[idx]['content'] = response['text']
+                        execute_cell(idx)
 
-                # Result Object Display
-                if cell.get('result') is not None:
-                    st.dataframe(cell['result'])
+                    # Sync content
+                    if response['text'] != cell['content']:
+                         st.session_state.notebook_cells[idx]['content'] = response['text']
+
+                    # Output Display
+                    if cell.get('output'):
+                        st.divider()
+                        st.caption("Error:")
+                        st.error(cell['output'])
+
+                    # Result Object Display
+                    if cell.get('result') is not None:
+                        st.dataframe(cell['result'])
+
+        # Render "Add" control after this cell (which corresponds to idx + 1)
+        render_add_cell_controls(idx + 1)
 
 def render_sidebar():
     with st.sidebar:
@@ -554,13 +603,17 @@ def render_workspace():
 
     # --- Notebook (Right Column) ---
     with col_work:
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.title("Workspace")
-        with c2:
-            if df is not None:
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
+        st.title("Workspace")
+        if df is not None:
+            # Data Preview
+            st.subheader("Data Preview")
+            st.dataframe(df.head(), use_container_width=True)
+
+            # Download
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Data", csv, "project_data.csv", "text/csv")
+
+        st.divider()
 
         render_notebook()
 
