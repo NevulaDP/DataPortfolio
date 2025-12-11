@@ -447,9 +447,9 @@ def render_floating_chat():
 
     # Float the container
     # Position shifted to 370px to clear sidebar when open
-    # Added explicit background color variable to handle themes/transparency
-    # Added border for visibility
-    chat_con.float("bottom: 20px; left: 370px; width: 400px; z-index: 99999; background-color: var(--background-color) !important; color: var(--text-color); border: 1px solid rgba(128, 128, 128, 0.5); border-radius: 10px; padding: 10px;")
+    # Uses 'canvas' background to ensure opacity and adaptation to system/browser theme (fixing transparency issue)
+    # Removed border/padding to avoid "double box" effect
+    chat_con.float("bottom: 20px; left: 370px; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
 
 
 @st.fragment
