@@ -74,13 +74,57 @@ st.markdown("""
     }
 
     /* Dark Mode Support for st_quill */
-    @media (prefers-color-scheme: dark) {
-        iframe[title="streamlit_quill.streamlit_quill"] {
-            filter: invert(1) hue-rotate(180deg);
-        }
+    /* Target body with class added by JS injection */
+    body.st-theme-dark iframe[title="streamlit_quill.streamlit_quill"] {
+        filter: invert(1) hue-rotate(180deg);
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Inject JS to detect theme based on computed background color
+import streamlit.components.v1 as components
+components.html("""
+<script>
+    function checkTheme() {
+        try {
+            // Access parent document (main app)
+            const parentDoc = window.parent.document;
+            const body = parentDoc.body;
+
+            // Get computed background color of the body or main container
+            // Streamlit applies theme to .stApp or body
+            const computedStyle = window.parent.getComputedStyle(body);
+            const bgColor = computedStyle.backgroundColor;
+
+            // Check if color is dark
+            // RGB(r, g, b)
+            const rgb = bgColor.match(/\d+/g);
+            if (rgb) {
+                const r = parseInt(rgb[0]);
+                const g = parseInt(rgb[1]);
+                const b = parseInt(rgb[2]);
+
+                // Simple brightness formula
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+                if (brightness < 128) {
+                    body.classList.add('st-theme-dark');
+                    body.classList.remove('st-theme-light');
+                } else {
+                    body.classList.remove('st-theme-dark');
+                    body.classList.add('st-theme-light');
+                }
+            }
+        } catch (e) {
+            console.error("Theme detection error:", e);
+        }
+    }
+
+    // Run periodically to catch theme toggles
+    setInterval(checkTheme, 500);
+    checkTheme(); // Initial check
+</script>
+""", height=0, width=0)
 
 # --- Functions ---
 
