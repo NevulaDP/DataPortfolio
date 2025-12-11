@@ -12,6 +12,7 @@ import ast
 import duckdb
 from code_editor import code_editor
 from streamlit_quill import st_quill
+from streamlit_float import *
 from services.generator import project_generator
 from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
@@ -22,6 +23,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize float
+float_init()
 
 # --- Session State Management ---
 if 'project' not in st.session_state:
@@ -34,6 +38,12 @@ if 'notebook_cells' not in st.session_state:
     st.session_state.notebook_cells = []
 if 'notebook_scope' not in st.session_state:
     st.session_state.notebook_scope = {}
+# Track editing state for cells: {cell_id: boolean}
+if 'cell_edit_state' not in st.session_state:
+    st.session_state.cell_edit_state = {}
+# Track chat processing state
+if 'processing_chat' not in st.session_state:
+    st.session_state.processing_chat = False
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -61,6 +71,13 @@ st.markdown("""
     }
     .stButton button {
         border-radius: 5px;
+    }
+    /* Chat Container Styling */
+    .floating-chat-container {
+        background-color: #262730;
+        border: 1px solid #464b5d;
+        border-radius: 10px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -99,6 +116,11 @@ def init_notebook_state():
                 "content": "### Analysis<br>Perform your analysis below. To display a plot, return the figure object or use `st.pyplot()`."
             }
         ]
+        # Set default edit state to False (Preview Mode) for initial text cells?
+        # Or True (Edit Mode)? Let's go with True for new cells usually.
+        for cell in st.session_state.notebook_cells:
+            if cell['type'] == 'markdown':
+                st.session_state.cell_edit_state[cell['id']] = True
 
 def execute_cell(cell_idx):
     if cell_idx < 0 or cell_idx >= len(st.session_state.notebook_cells):
@@ -182,13 +204,19 @@ def execute_cell(cell_idx):
              st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
 
 def add_cell(cell_type, index=None):
+    new_id = str(uuid.uuid4())
     new_cell = {
-        "id": str(uuid.uuid4()),
+        "id": new_id,
         "type": cell_type,
         "content": "",
         "output": "",
         "result": None
     }
+
+    # Default to edit mode for new markdown cells
+    if cell_type == 'markdown':
+        st.session_state.cell_edit_state[new_id] = True
+
     if index is not None and 0 <= index <= len(st.session_state.notebook_cells):
         st.session_state.notebook_cells.insert(index, new_cell)
     else:
@@ -196,7 +224,11 @@ def add_cell(cell_type, index=None):
 
 def delete_cell(index):
     if 0 <= index < len(st.session_state.notebook_cells):
+        cell_id = st.session_state.notebook_cells[index]['id']
         st.session_state.notebook_cells.pop(index)
+        # Cleanup edit state
+        if cell_id in st.session_state.cell_edit_state:
+            del st.session_state.cell_edit_state[cell_id]
         st.rerun()
 
 def generate_project():
@@ -238,6 +270,17 @@ def generate_project():
         except Exception as e:
             st.error(f"Error generating project: {e}")
             traceback.print_exc()
+
+def toggle_edit_mode(cell_id):
+    current_state = st.session_state.cell_edit_state.get(cell_id, True)
+    st.session_state.cell_edit_state[cell_id] = not current_state
+
+def send_chat_message():
+    """Callback to send chat message and clear input."""
+    if st.session_state.chat_input_text:
+        st.session_state.messages.append({"role": "user", "content": st.session_state.chat_input_text})
+        st.session_state.chat_input_text = ""
+        st.session_state.processing_chat = True
 
 # --- UI Components ---
 
@@ -359,6 +402,60 @@ def render_add_cell_controls(index):
                 add_cell("markdown", index)
                 st.rerun()
 
+def render_floating_chat():
+    project = st.session_state.project
+    definition = project['definition']
+
+    # Create a container for the floating chat
+    chat_con = st.container()
+
+    with chat_con:
+        # Use an expander to allow collapsing/expanding
+        # Defaulting to expanded so the user sees it immediately
+        with st.expander("💬 Mentor Chat", expanded=True):
+            # Message History
+            chat_container = st.container(height=300)
+            for msg in st.session_state.messages:
+                chat_container.chat_message(msg["role"]).write(msg["content"])
+
+            # Input Area
+            # Using columns to place input and button side-by-side
+            c_input, c_btn = st.columns([4, 1])
+            with c_input:
+                st.text_input("Message", key="chat_input_text", label_visibility="collapsed")
+            with c_btn:
+                st.button("Send", use_container_width=True, on_click=send_chat_message)
+
+            # Processing LLM logic
+            if st.session_state.processing_chat:
+                # Build Context from Notebook Cells
+                notebook_context = []
+                for cell in st.session_state.notebook_cells:
+                    notebook_context.append({
+                        "cell_type": cell['type'],
+                        "source": cell['content'],
+                        "output": cell.get('output', '')
+                    })
+
+                code_context = {"notebook": notebook_context}
+
+                # Call LLM
+                with st.spinner("Thinking..."):
+                     response = llm_service.generate_text(
+                        prompt=st.session_state.messages[-1]["content"],
+                        api_key=st.session_state.api_key,
+                        project_context=definition,
+                        code_context=code_context,
+                        history=st.session_state.messages[:-2] # History excluding current msg
+                    )
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.processing_chat = False
+                st.rerun()
+
+    # Float the container
+    chat_con.float("bottom: 20px; right: 20px; width: 400px; background-color: #262730; border: 1px solid #4CAF50; border-radius: 10px; z-index: 9999;")
+
+
 @st.fragment
 def render_notebook():
     # Get current completions
@@ -371,9 +468,9 @@ def render_notebook():
     # Render Cells
     for idx, cell in enumerate(st.session_state.notebook_cells):
         cell_key = f"cell_{cell['id']}"
+        cell_id = cell['id']
 
         # Determine container styling based on type
-        # We wrap the whole cell in a container
         with st.container(border=True):
             # Top Bar: Label and Delete Button
             col_lbl, col_del = st.columns([1, 0.05])
@@ -383,32 +480,49 @@ def render_notebook():
 
             with col_lbl:
                 if cell['type'] == 'markdown':
-                    st.caption("Text / Markdown")
-                    # Rich Text Editor
-                    # Note: st_quill content sync is slightly different than text_area
-                    content = st_quill(
-                        value=cell['content'],
-                        placeholder="Write your analysis here...",
-                        html=True,
-                        key=f"quill_{cell_key}",
-                        toolbar=[
-                            ['bold', 'italic', 'underline', 'strike'],        # toggled buttons
-                            ['blockquote', 'code-block'],
-                            [{'header': 1}, {'header': 2}],               # custom button values
-                            [{'list': 'ordered'}, {'list': 'bullet'}],
-                            [{'script': 'sub'}, {'script': 'super'}],      # superscript/subscript
-                            [{'indent': '-1'}, {'indent': '+1'}],          # outdent/indent
-                            [{'direction': 'rtl'}],                         # text direction
-                            [{'color': []}, {'background': []}],          # dropdown with defaults from theme
-                            [{'align': []}],
-                            ['clean']                                         # remove formatting button
-                        ]
-                    )
+                    # Check Edit State
+                    is_editing = st.session_state.cell_edit_state.get(cell_id, True)
 
-                    # Sync content if changed
-                    # Quill updates on blur or periodically, need to check if content changed
-                    if content != cell['content']:
-                        st.session_state.notebook_cells[idx]['content'] = content
+                    # Label + Toggle Button
+                    c_label, c_toggle = st.columns([0.9, 0.1])
+                    with c_label:
+                        st.caption("Text / Markdown")
+                    with c_toggle:
+                        if is_editing:
+                            if st.button("👁️", key=f"toggle_prev_{cell_key}", help="Preview"):
+                                toggle_edit_mode(cell_id)
+                                st.rerun()
+                        else:
+                            if st.button("✏️", key=f"toggle_edit_{cell_key}", help="Edit"):
+                                toggle_edit_mode(cell_id)
+                                st.rerun()
+
+                    if is_editing:
+                        # Rich Text Editor
+                        content = st_quill(
+                            value=cell['content'],
+                            placeholder="Write your analysis here...",
+                            html=True,
+                            key=f"quill_{cell_key}",
+                            toolbar=[
+                                ['bold', 'italic', 'underline', 'strike'],
+                                ['blockquote', 'code-block'],
+                                [{'header': 1}, {'header': 2}],
+                                [{'list': 'ordered'}, {'list': 'bullet'}],
+                                [{'script': 'sub'}, {'script': 'super'}],
+                                [{'indent': '-1'}, {'indent': '+1'}],
+                                [{'direction': 'rtl'}],
+                                [{'color': []}, {'background': []}],
+                                [{'align': []}],
+                                ['clean']
+                            ]
+                        )
+                        # Sync content
+                        if content != cell['content']:
+                            st.session_state.notebook_cells[idx]['content'] = content
+                    else:
+                        # Preview Mode (Render HTML)
+                        st.markdown(cell['content'], unsafe_allow_html=True)
 
                 elif cell['type'] == 'code':
                     st.caption("Python")
@@ -550,7 +664,7 @@ def render_workspace():
 
     col_context, col_work = st.columns([1, 2], gap="large")
 
-    # --- Chat & Context (Left Column) ---
+    # --- Context (Left Column) ---
     with col_context:
         st.markdown(f"""
         <div class="scenario-box">
@@ -568,39 +682,6 @@ def render_workspace():
             for col in schema:
                 st.write(f"**{col['name']}** ({col['type']})")
 
-        st.divider()
-        st.header("💬 Mentor Chat")
-
-        chat_container = st.container(height=400)
-        for msg in st.session_state.messages:
-            chat_container.chat_message(msg["role"]).write(msg["content"])
-
-        if prompt := st.chat_input("Ask for help..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            chat_container.chat_message("user").write(prompt)
-
-            # Build Context from Notebook Cells
-            notebook_context = []
-            for cell in st.session_state.notebook_cells:
-                notebook_context.append({
-                    "cell_type": cell['type'],
-                    "source": cell['content'],
-                    "output": cell.get('output', '')
-                })
-
-            code_context = {"notebook": notebook_context}
-
-            with st.spinner("Thinking..."):
-                response = llm_service.generate_text(
-                    prompt=prompt,
-                    api_key=st.session_state.api_key,
-                    project_context=definition,
-                    code_context=code_context,
-                    history=st.session_state.messages[:-1]
-                )
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-
     # --- Notebook (Right Column) ---
     with col_work:
         st.title("Workspace")
@@ -616,6 +697,9 @@ def render_workspace():
         st.divider()
 
         render_notebook()
+
+    # --- Floating Chat ---
+    render_floating_chat()
 
 # --- Main App Logic ---
 
