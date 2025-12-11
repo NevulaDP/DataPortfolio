@@ -73,6 +73,12 @@ st.markdown("""
         border-radius: 5px;
     }
 
+    /* Dark Mode Support for st_quill */
+    @media (prefers-color-scheme: dark) {
+        iframe[title="streamlit_quill.streamlit_quill"] {
+            filter: invert(1) hue-rotate(180deg);
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
