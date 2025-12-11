@@ -276,6 +276,7 @@ def delete_cell(index):
         st.rerun()
 
 def generate_project():
+    print(f"DEBUG: Starting project generation for sector: {st.session_state.sector_input}")
     if not st.session_state.sector_input:
         st.error("Please enter a sector.")
         return
@@ -286,14 +287,19 @@ def generate_project():
                 st.session_state.sector_input,
                 st.session_state.api_key
             )
+            print("DEBUG: Project definition received.")
 
             if "error" in definition:
+                print(f"DEBUG: Error in definition: {definition['error']}")
                 st.error(definition["error"])
                 return
 
             if 'recipe' in definition:
+                print("DEBUG: generating dataset...")
                 df = project_generator.generate_dataset(definition['recipe'], rows=10000)
+                print(f"DEBUG: Dataset generated. Shape: {df.shape}")
             else:
+                print("DEBUG: Invalid recipe format.")
                 st.error("Invalid recipe format received from AI.")
                 return
 
@@ -311,7 +317,9 @@ def generate_project():
                 "role": "assistant",
                 "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
             }]
+            print("DEBUG: Project setup complete.")
         except Exception as e:
+            print(f"DEBUG: Exception in generate_project: {e}")
             st.error(f"Error generating project: {e}")
             traceback.print_exc()
 
