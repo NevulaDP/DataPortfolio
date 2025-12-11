@@ -14,28 +14,38 @@ llm_service = LLMService()
 class ProjectGenerator:
     def generate_project_definition(self, sector: str, api_key: str = None):
         prompt = f"""
-        Generate a data analysis project scenario for a Junior Data Analyst in the '{sector}' sector.
+        Act as an expert Data Science Mentor and Creative Writer.
+        Generate a comprehensive and realistic data analysis project scenario for a Junior Data Analyst in the '{sector}' sector.
+
+        **Creativity Guidelines:**
+        1. **Company & Context:** Invent a unique, realistic company name and a specific business situation. Do NOT use generic names like "Company A" or "Retail Corp". Create a rich backstory (e.g., "TechNova is facing a 15% churn rate after their latest UI update...").
+        2. **Diversity:** Vary the problem type. Do not always choose "Sales Analysis". Consider Churn Prediction, Supply Chain Optimization, Sentiment Analysis, Fraud Detection, etc.
+        3. **Data Realism:** For the `anchor_entity`, use REAL-WORLD examples specific to the sector.
+           - Bad: "Option A", "Option B"
+           - Good (Automotive): "Tesla Model 3", "Ford F-150", "Toyota Camry"
+           - Good (Retail): "Wireless Headphones", "Running Shoes", "Smart Watch"
+        4. **Correlations:** Ensure the rules for correlated columns reflect logical real-world relationships (e.g., Higher price -> Lower sales volume, or Holiday season -> Higher traffic).
 
         Output a JSON with the following structure:
         {{
-            "title": "Project Title",
-            "description": "Detailed scenario description describing the business context and the problem to solve.",
-            "tasks": ["List of 3-5 specific questions or tasks for the analyst"],
+            "title": "Creative Project Title",
+            "description": "Detailed 3-4 sentence scenario description describing the unique business context, the specific company, and the urgent problem to solve.",
+            "tasks": ["List of 3-5 specific, actionable questions for the analyst (e.g., 'Calculate the impact of X on Y')"],
             "recipe": {{
                 "anchor_entity": {{
-                    "name": "Name of the main entity (e.g. 'car_model', 'department')",
-                    "options": ["List", "of", "5-10", "specific", "options"],
+                    "name": "Name of the main entity (e.g. 'car_model', 'department', 'subscription_tier')",
+                    "options": ["List", "of", "5-10", "specific", "REAL-WORLD", "examples"],
                     "weights": [0.1, 0.2, "etc (must sum to 1, length match options)"]
                 }},
                 "correlated_columns": [
                     {{
                         "name": "column_name_snake_case",
                         "type": "numeric",
-                        "description": "Description",
+                        "description": "Description of the metric",
                         "rules": {{
-                            "Option1FromAnchor": {{"min": 10, "max": 20}},
-                            "Option2FromAnchor": {{"min": 50, "max": 100}}
-                            // Ensure all anchor options are covered or provide a "default"
+                            "SpecificAnchorOption1": {{"min": 10, "max": 20}},
+                            "SpecificAnchorOption2": {{"min": 50, "max": 100}},
+                            "default": {{"min": 0, "max": 50}}
                         }}
                     }},
                     {{
@@ -43,8 +53,8 @@ class ProjectGenerator:
                         "type": "boolean",
                         "description": "Description",
                         "rules": {{
-                            "Option1FromAnchor": 0.8, // Probability of True
-                            "Option2FromAnchor": 0.2
+                            "SpecificAnchorOption1": 0.8, // Probability of True
+                            "SpecificAnchorOption2": 0.2
                         }}
                     }}
                 ],
