@@ -6,6 +6,7 @@ numpy
 pandas
 python-dotenv
 seaborn
-streamlit
+streamlit>=1.33.0
 streamlit-code-editor
 duckdb
+streamlit-quill
