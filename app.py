@@ -226,7 +226,7 @@ def generate_project():
 
 # --- UI Components ---
 
-def get_completions():
+def get_python_completions():
     completions = []
 
     # 1. Scope Variables
@@ -264,7 +264,6 @@ def get_completions():
                     })
 
     # 3. Common Methods (Static list for standard libraries)
-    # This helps users with common pandas/numpy/plotting operations
     common_methods = [
         # Pandas
         "head", "tail", "describe", "info", "columns", "index", "dtypes",
@@ -288,10 +287,52 @@ def get_completions():
 
     return completions
 
+def get_sql_completions():
+    completions = []
+
+    # 1. Tables
+    for table in ['df', 'data']:
+        completions.append({
+            "caption": table,
+            "value": table,
+            "meta": "Table",
+            "score": 1000
+        })
+
+    # 2. Columns (from project_data)
+    df = st.session_state.get('project_data')
+    if df is not None:
+         for col in df.columns:
+            col_str = str(col)
+            completions.append({
+                "caption": col_str,
+                "value": col_str,
+                "meta": "Column",
+                "score": 900
+            })
+
+    # 3. SQL Keywords (Basic list)
+    keywords = [
+        "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "LIMIT",
+        "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "ON",
+        "COUNT", "SUM", "AVG", "MIN", "MAX", "HAVING", "DISTINCT",
+        "AS", "CASE", "WHEN", "THEN", "ELSE", "END", "LIKE", "IN"
+    ]
+    for kw in keywords:
+        completions.append({
+            "caption": kw,
+            "value": kw,
+            "meta": "Keyword",
+            "score": 500
+        })
+
+    return completions
+
 @st.fragment
 def render_notebook():
     # Get current completions
-    completions = get_completions()
+    py_completions = get_python_completions()
+    sql_completions = get_sql_completions()
 
     # Toolbar
     col_btn1, col_btn2, col_btn3, _ = st.columns([1, 1, 1, 3])
@@ -343,7 +384,7 @@ def render_notebook():
                         "maxLines": 20,
                         "scrollPastEnd": 0.5, # Helps with bottom clipping by allowing scroll
                     },
-                    completions=completions,
+                    completions=py_completions,
                     buttons=[{
                         "name": "Run",
                         "feather": "Play",
@@ -381,11 +422,19 @@ def render_notebook():
                     cell['content'],
                     lang="sql",
                     key=f"ce_{cell_key}",
-                    height=200,
+                    height=250,
                     options={
+                        "displayIndentGuides": True,
+                        "highlightActiveLine": True,
                         "wrap": True,
+                        "enableLiveAutocompletion": True,
+                        "enableBasicAutocompletion": True,
+                        "enableSnippets": True,
+                        "minLines": 10,
+                        "maxLines": 20,
                         "scrollPastEnd": 0.5,
                     },
+                    completions=sql_completions,
                     buttons=[{
                         "name": "Run",
                         "feather": "Play",
