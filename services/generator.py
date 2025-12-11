@@ -13,18 +13,28 @@ llm_service = LLMService()
 
 class ProjectGenerator:
     def generate_project_definition(self, sector: str, api_key: str = None):
+        # Inject a random seed to force the LLM to diverge from its deterministic path
+        random_seed = random.randint(1, 100000)
+
         prompt = f"""
         Act as an expert Data Science Mentor and Creative Writer.
         Generate a comprehensive and realistic data analysis project scenario for a Junior Data Analyst in the '{sector}' sector.
 
+        **Entropy Injection:**
+        Random Seed: {random_seed}
+        (Use this seed to wildly vary the Company Name, Business Situation, and specific Data Problems. Do not repeat previous outputs.)
+
         **Creativity Guidelines:**
-        1. **Company & Context:** Invent a unique, realistic company name and a specific business situation. Do NOT use generic names like "Company A" or "Retail Corp". Create a rich backstory (e.g., "TechNova is facing a 15% churn rate after their latest UI update...").
-        2. **Diversity:** Vary the problem type. Do not always choose "Sales Analysis". Consider Churn Prediction, Supply Chain Optimization, Sentiment Analysis, Fraud Detection, etc.
+        1. **Company & Context:** Invent a unique, realistic company name and a specific, detailed business situation.
+           - Do NOT use generic names like "Company A".
+           - VARY the company stage (Startup vs Enterprise vs Non-profit).
+           - VARY the core problem (e.g., Fraud, Efficiency, Growth, Retention, Logistics).
+        2. **Diversity:** Ensure the scenario is NOT just a standard "Sales Analysis". Dig deep into sector-specific nuances (e.g., for 'AdTech', look at attribution models or bid density; for 'Healthcare', look at patient readmission or bed occupancy).
         3. **Data Realism:** For the `anchor_entity`, use REAL-WORLD examples specific to the sector.
            - Bad: "Option A", "Option B"
            - Good (Automotive): "Tesla Model 3", "Ford F-150", "Toyota Camry"
            - Good (Retail): "Wireless Headphones", "Running Shoes", "Smart Watch"
-        4. **Correlations:** Ensure the rules for correlated columns reflect logical real-world relationships (e.g., Higher price -> Lower sales volume, or Holiday season -> Higher traffic).
+        4. **Correlations:** Ensure the rules for correlated columns reflect logical real-world relationships.
 
         Output a JSON with the following structure:
         {{

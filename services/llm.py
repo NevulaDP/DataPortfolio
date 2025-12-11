@@ -22,7 +22,7 @@ class LLMService:
         except Exception as e:
             return [f"Error listing models: {str(e)}"]
 
-    def generate_json(self, prompt: str, api_key: str = None) -> dict:
+    def generate_json(self, prompt: str, api_key: str = None, temperature: float = 0.9) -> dict:
         key_to_use = api_key or os.getenv("GEMINI_API_KEY")
         if not key_to_use:
             return self._mock_response(prompt)
@@ -30,7 +30,11 @@ class LLMService:
         try:
             model = self._get_model(key_to_use)
             full_prompt = f"{prompt}\n\nRespond strictly with valid JSON."
-            response = model.generate_content(full_prompt)
+            # Set high temperature for creativity
+            generation_config = genai.types.GenerationConfig(
+                temperature=temperature
+            )
+            response = model.generate_content(full_prompt, generation_config=generation_config)
             text = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(text)
         except Exception as e:
