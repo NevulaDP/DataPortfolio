@@ -28,6 +28,27 @@ class ProjectGenerator:
         return full_project
 
     def _generate_scenario_narrative(self, sector: str, api_key: str, previous_context: list):
+        # Guided Randomness: Pre-select scenario constraints
+        company_types = [
+            "Rapidly Growing Startup", "Global Enterprise", "Struggling Legacy Brand",
+            "Non-Profit Organization", "Boutique Agency", "Government Department",
+            "E-commerce Giant", "Local Chain"
+        ]
+        problems = [
+            "Customer Churn", "Fraud Detection", "Supply Chain Bottlenecks",
+            "Marketing Attribution", "Employee Retention", "Inventory Management",
+            "Price Optimization", "Sentiment Analysis", "Operational Inefficiency",
+            "Predictive Maintenance"
+        ]
+        tones = [
+            "Urgent Crisis", "Optimistic Growth", "Strategic Pivot",
+            "Post-Merger Integration", "Regulatory Compliance Pressure"
+        ]
+
+        # Randomly select specific constraints
+        selected_type = random.choice(company_types)
+        selected_problem = random.choice(problems)
+        selected_tone = random.choice(tones)
         random_seed = random.randint(1, 100000)
 
         avoid_str = ""
@@ -40,14 +61,18 @@ class ProjectGenerator:
 
         **Goal:** Write a compelling backstory for a company facing a specific data problem.
 
+        **MANDATORY CONSTRAINTS (You MUST follow these):**
+        - **Company Type:** {selected_type}
+        - **Core Problem:** {selected_problem}
+        - **Scenario Tone:** {selected_tone}
+
         **Entropy Injection:**
         Random Seed: {random_seed}
         {avoid_str}
 
         **Guidelines:**
         1. **Company:** Invent a unique name. Do NOT use generic names.
-        2. **Problem:** Be specific. Is it Fraud? Supply Chain? Churn? Ad Spend?
-        3. **Context:** Provide rich details about the situation.
+        2. **Context:** Provide rich details about the situation, strictly adhering to the 'Company Type' and 'Tone' above.
 
         Output ONLY valid JSON:
         {{
