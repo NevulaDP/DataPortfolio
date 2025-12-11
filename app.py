@@ -449,7 +449,8 @@ def render_floating_chat():
     # Float the container
     # Positioned on the right side (independent of sidebar)
     # Uses 'canvas' background to ensure opacity and adaptation to system/browser theme
-    chat_con.float("bottom: 20px; right: 3rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
+    # Raised bottom offset to clear Streamlit footer
+    chat_con.float("bottom: 5rem; right: 3rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
 
 
 @st.fragment
