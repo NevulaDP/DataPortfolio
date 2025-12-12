@@ -34,14 +34,24 @@ class ProjectGenerator:
 
         # 1. Project Archetypes (Analysis Types)
         archetypes = [
-            "Growth Strategy Analysis (identifying new markets or customer segments)",
-            "Operational Efficiency (finding bottlenecks or waste)",
-            "Product Performance & Forecasting (predicting future trends)",
-            "Customer Churn & Retention (understanding why users leave)",
-            "Pricing Strategy Optimization (elasticity and profitability)",
-            "Marketing Campaign Effectiveness (ROI analysis)",
-            "Inventory & Supply Chain Optimization",
-            "Anomaly Detection (investigating strange data patterns)" # Kept as one option
+            # Retail/General Business
+            "Sales Trend Analysis (identifying seasonal patterns and top performers)",
+            "Customer Segmentation & Profiling (grouping users by behavior)",
+            "Product Performance Review (analyzing sales vs returns)",
+            "Customer Churn Analysis (identifying at-risk customers)",
+            "Pricing & Discount Analysis (impact of discounts on revenue)",
+            "Marketing Campaign Performance (ROI and conversion rates)",
+            "Inventory Turnover & Stock Analysis (identifying slow-moving items)",
+            "Operational KPI Dashboarding (tracking core business metrics)",
+
+            # AdTech / High Tech / SaaS
+            "Ad Campaign Performance & Attribution (CTR, CPC, Conversion analysis)",
+            "Feature Usage & Adoption Analysis (SaaS product metrics)",
+            "A/B Test Result Analysis (comparing control vs variant groups)",
+            "User Engagement & Session Analysis (time on site, bounce rates)",
+
+            # General
+            "Anomaly Detection (investigating data irregularities)"
         ]
 
         # 2. Business Contexts (Scale/Stage)
@@ -51,7 +61,9 @@ class ProjectGenerator:
             "A large legacy corporation facing a PR crisis",
             "A non-profit organization struggling with donor retention",
             "A high-volume e-commerce giant facing stiff competition",
-            "A boutique luxury brand expanding to mass market"
+            "A boutique luxury brand expanding to mass market",
+            "A B2B SaaS platform focused on user retention",
+            "A digital media agency optimizing ad spend for clients"
         ]
 
         # Select one of each
@@ -66,6 +78,8 @@ class ProjectGenerator:
         Act as an expert Creative Writer and Data Science Mentor.
         Create a unique, detailed, and realistic scenario for a Data Analysis project in the '{sector}' sector.
 
+        **Target Audience:** Junior Data Analyst (Portfolio Project).
+
         **Structural Constraints:**
         1. **Client Profile:** {selected_context}.
         2. **Core Data Task:** {selected_archetype}.
@@ -77,9 +91,10 @@ class ProjectGenerator:
         {avoid_str}
 
         **Guidelines:**
-        1. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
-        2. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
-        3. **Context:** Provide rich business details. *Why* is this specific analysis crucial right now?
+        1. **Scope:** Focus on descriptive and diagnostic analysis (Trends, KPIs, Comparisons, Aggregations). Avoid complex predictive modeling, supply chain planning, or operations research tasks that are outside the scope of a Junior Data Analyst.
+        2. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
+        3. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
+        4. **Context:** Provide rich business details. *Why* is this specific analysis crucial right now?
 
         Output ONLY valid JSON:
         {{
@@ -104,10 +119,10 @@ class ProjectGenerator:
         **Task:** Design a synthetic dataset schema (recipe) that perfectly matches this scenario.
 
         **Requirements:**
-        1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction').
+        1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
         2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
-        3. **Tasks:** Define 3-5 analysis questions solvable with this data.
+        3. **Tasks:** Define 3-5 analysis questions solvable with this data (Focus on SQL/Pandas aggregation and visualization).
 
         Output a JSON merging the scenario and the recipe:
         {{
