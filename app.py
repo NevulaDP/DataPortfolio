@@ -17,6 +17,7 @@ from services.generator import project_generator
 from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
 from services.report_generator import generate_html_report
+from services.verifier import VerifierService
 
 # --- Page Config ---
 st.set_page_config(
@@ -48,9 +49,12 @@ if 'processing_chat' not in st.session_state:
 # Track history of generated project titles/companies to prevent repetition
 if 'generated_history' not in st.session_state:
     st.session_state.generated_history = []
+if 'verification_result' not in st.session_state:
+    st.session_state.verification_result = None
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
+verifier_service = VerifierService()
 
 # --- Custom CSS for Layout ---
 st.markdown("""
@@ -305,6 +309,14 @@ def generate_project():
             else:
                 st.error("Invalid recipe format received from AI.")
                 return
+
+            # Verification Step
+            verification = verifier_service.verify_dataset_schema(
+                definition,
+                df,
+                st.session_state.api_key
+            )
+            st.session_state.verification_result = verification
 
             st.session_state.project = {
                 "definition": definition,
@@ -766,6 +778,18 @@ def render_workspace():
     # --- Notebook (Right Column) ---
     with col_work:
         st.title("Workspace")
+
+        # Display Verification Alert if there are issues
+        ver_res = st.session_state.get('verification_result')
+        if ver_res and not ver_res.get('valid', True):
+            st.error(f"⚠️ Data Issues Detected (Score: {ver_res.get('score', 0)})")
+            for issue in ver_res.get('issues', []):
+                st.markdown(f"- {issue}")
+        elif ver_res and ver_res.get('valid', True) and ver_res.get('issues'):
+             with st.expander(f"✅ Data Verified (Score: {ver_res.get('score', 100)}) - Click to see notes"):
+                for issue in ver_res.get('issues', []):
+                    st.markdown(f"- {issue}")
+
         if df is not None:
             # Data Preview
             st.subheader("Data Preview")
