@@ -28,27 +28,6 @@ class ProjectGenerator:
         return full_project
 
     def _generate_scenario_narrative(self, sector: str, api_key: str, previous_context: list):
-        # Guided Randomness: Pre-select scenario constraints
-        company_types = [
-            "Rapidly Growing Startup", "Global Enterprise", "Struggling Legacy Brand",
-            "Non-Profit Organization", "Boutique Agency", "Government Department",
-            "E-commerce Giant", "Local Chain"
-        ]
-        problems = [
-            "Customer Churn", "Fraud Detection", "Supply Chain Bottlenecks",
-            "Marketing Attribution", "Employee Retention", "Inventory Management",
-            "Price Optimization", "Sentiment Analysis", "Operational Inefficiency",
-            "Predictive Maintenance"
-        ]
-        tones = [
-            "Urgent Crisis", "Optimistic Growth", "Strategic Pivot",
-            "Post-Merger Integration", "Regulatory Compliance Pressure"
-        ]
-
-        # Randomly select specific constraints
-        selected_type = random.choice(company_types)
-        selected_problem = random.choice(problems)
-        selected_tone = random.choice(tones)
         random_seed = random.randint(1, 100000)
 
         avoid_str = ""
@@ -57,22 +36,18 @@ class ProjectGenerator:
 
         prompt = f"""
         Act as an expert Creative Writer and Data Science Mentor.
-        Create a unique, detailed scenario for a Data Analysis project in the '{sector}' sector.
+        Create a unique, detailed, and non-generic scenario for a Data Analysis project in the '{sector}' sector.
 
-        **Goal:** Write a compelling backstory for a company facing a specific data problem.
-
-        **MANDATORY CONSTRAINTS (You MUST follow these):**
-        - **Company Type:** {selected_type}
-        - **Core Problem:** {selected_problem}
-        - **Scenario Tone:** {selected_tone}
+        **Goal:** Write a compelling backstory for a company facing a specific, urgent data problem.
 
         **Entropy Injection:**
         Random Seed: {random_seed}
         {avoid_str}
 
         **Guidelines:**
-        1. **Company:** Invent a unique name. Do NOT use generic names.
-        2. **Context:** Provide rich details about the situation, strictly adhering to the 'Company Type' and 'Tone' above.
+        1. **Creativity:** Do NOT use standard, boring tropes (e.g., just "Sales Analysis"). Be specific, weird, or niche if possible.
+        2. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A" or "Retail Corp".
+        3. **Context:** Provide rich details about the business situation. Is it a startup running out of runway? A legacy brand facing a PR crisis? A non-profit struggling with donor retention?
 
         Output ONLY valid JSON:
         {{
