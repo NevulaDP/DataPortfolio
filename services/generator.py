@@ -30,24 +30,56 @@ class ProjectGenerator:
     def _generate_scenario_narrative(self, sector: str, api_key: str, previous_context: list):
         random_seed = random.randint(1, 100000)
 
+        # --- Structural Randomness to Force Variety ---
+
+        # 1. Project Archetypes (Analysis Types)
+        archetypes = [
+            "Growth Strategy Analysis (identifying new markets or customer segments)",
+            "Operational Efficiency (finding bottlenecks or waste)",
+            "Product Performance & Forecasting (predicting future trends)",
+            "Customer Churn & Retention (understanding why users leave)",
+            "Pricing Strategy Optimization (elasticity and profitability)",
+            "Marketing Campaign Effectiveness (ROI analysis)",
+            "Inventory & Supply Chain Optimization",
+            "Anomaly Detection (investigating strange data patterns)" # Kept as one option
+        ]
+
+        # 2. Business Contexts (Scale/Stage)
+        contexts = [
+            "A rapidly scaling tech startup running out of runway",
+            "A stable, family-owned business trying to modernize",
+            "A large legacy corporation facing a PR crisis",
+            "A non-profit organization struggling with donor retention",
+            "A high-volume e-commerce giant facing stiff competition",
+            "A boutique luxury brand expanding to mass market"
+        ]
+
+        # Select one of each
+        selected_archetype = random.choice(archetypes)
+        selected_context = random.choice(contexts)
+
         avoid_str = ""
         if previous_context:
             avoid_str = "\n**FORBIDDEN TERMS (DO NOT USE):**\n" + ", ".join(previous_context) + "\n(You MUST generate a completely different company and scenario from these.)"
 
         prompt = f"""
         Act as an expert Creative Writer and Data Science Mentor.
-        Create a unique, detailed, and non-generic scenario for a Data Analysis project in the '{sector}' sector.
+        Create a unique, detailed, and realistic scenario for a Data Analysis project in the '{sector}' sector.
 
-        **Goal:** Write a compelling backstory for a company facing a specific, urgent data problem.
+        **Structural Constraints:**
+        1. **Client Profile:** {selected_context}.
+        2. **Core Data Task:** {selected_archetype}.
+
+        **Goal:** Write a compelling backstory for this specific client and their problem.
 
         **Entropy Injection:**
         Random Seed: {random_seed}
         {avoid_str}
 
         **Guidelines:**
-        1. **Creativity:** Do NOT use standard, boring tropes (e.g., just "Sales Analysis"). Be specific, weird, or niche if possible.
-        2. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A" or "Retail Corp".
-        3. **Context:** Provide rich details about the business situation. Is it a startup running out of runway? A legacy brand facing a PR crisis? A non-profit struggling with donor retention?
+        1. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
+        2. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
+        3. **Context:** Provide rich business details. *Why* is this specific analysis crucial right now?
 
         Output ONLY valid JSON:
         {{
