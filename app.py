@@ -293,31 +293,62 @@ def generate_project():
             # Pass history to prevent repetition
             history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
-            # Use the new orchestration method
-            definition = project_generator.orchestrate_project_generation(
+            # Step 1: Generate Narrative (Fixed)
+            narrative = project_generator._generate_scenario_narrative(
                 st.session_state.sector_input,
                 st.session_state.api_key,
                 previous_context=history_context
             )
 
-            if "error" in definition:
-                st.error(definition["error"])
+            if "error" in narrative:
+                st.error(narrative["error"])
                 return
 
-            if 'recipe' in definition:
-                df = project_generator.generate_dataset(definition['recipe'], rows=10000)
-            else:
-                st.error("Invalid recipe format received from AI.")
-                return
+            # Step 2: Generate Recipe & Data (Loop for correction)
+            max_retries = 3
+            current_try = 0
+            definition = None
+            df = None
+            verification = None
 
-            # Verification Step
-            verification = verifier_service.verify_dataset_schema(
-                definition,
-                df,
-                st.session_state.api_key
-            )
+            while current_try < max_retries:
+                if current_try == 0:
+                    # Initial Recipe Generation
+                    definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
+                else:
+                    # Refinement based on feedback
+                    st.toast(f"Refining data recipe (Attempt {current_try+1})...", icon="🔄")
+                    definition = project_generator.refine_data_recipe(
+                        narrative,
+                        verification['issues'],
+                        st.session_state.api_key
+                    )
+
+                if "error" in definition:
+                    st.error(definition["error"])
+                    return
+
+                if 'recipe' in definition:
+                    df = project_generator.generate_dataset(definition['recipe'], rows=10000)
+                else:
+                    st.error("Invalid recipe format received from AI.")
+                    return
+
+                # Verify
+                verification = verifier_service.verify_dataset_schema(
+                    definition,
+                    df,
+                    st.session_state.api_key
+                )
+
+                # Check Validity
+                if verification.get('valid', True):
+                    break # Success!
+
+                current_try += 1
+
+            # Store Final Results (even if invalid after max retries)
             st.session_state.verification_result = verification
-
             st.session_state.project = {
                 "definition": definition,
                 "data": df

@@ -171,6 +171,70 @@ class ProjectGenerator:
         """
         return llm_service.generate_json(prompt, api_key, temperature=0.8)
 
+    def refine_data_recipe(self, narrative: dict, feedback: list, api_key: str):
+        """
+        Refines the data recipe based on verification feedback while strictly adhering to the original narrative.
+        """
+        feedback_str = "\n".join([f"- {item}" for item in feedback])
+
+        prompt = f"""
+        Act as a Senior Data Architect.
+
+        **CRITICAL FIX REQUIRED:**
+        A previous attempt to generate a dataset for this scenario FAILED verification.
+        You must generate a **CORRECTED** recipe that resolves the following issues:
+
+        {feedback_str}
+
+        **Constraint:**
+        - You MUST keep the same Scenario (Title, Company, Problem).
+        - You MUST fix the specific schema/type mismatches mentioned above.
+        - Ensure the 'display_schema' types match the 'recipe' generation logic (e.g., if you say 'String', do not generate booleans).
+
+        **Project Scenario (DO NOT CHANGE):**
+        **Title:** {narrative.get('title')}
+        **Company:** {narrative.get('company_name')}
+        **Problem:** {narrative.get('business_problem')}
+        **Description:** {narrative.get('description')}
+
+        **Task:** Design a corrected synthetic dataset schema (recipe).
+
+        **Requirements:**
+        1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
+           - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
+        2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
+        3. **Tasks:** Define 3-5 analysis questions solvable with this data.
+
+        Output a JSON merging the scenario and the recipe:
+        {{
+            "title": "{narrative.get('title')}",
+            "description": "{narrative.get('description')}",
+            "tasks": ["List of 3-5 analysis tasks"],
+            "recipe": {{
+                "anchor_entity": {{
+                    "name": "Name of entity",
+                    "options": ["List", "of", "REAL", "examples"],
+                    "weights": [0.1, 0.2, "etc (sum to 1)"]
+                }},
+                "correlated_columns": [
+                    {{
+                        "name": "column_name_snake_case",
+                        "type": "numeric/boolean",
+                        "description": "Desc",
+                        "rules": {{ "Option1": {{"min":0, "max":10}} }}
+                    }}
+                ],
+                "faker_columns": [
+                    {{"name": "col_name", "faker_method": "name/date_this_year/city/email"}}
+                ]
+            }},
+            "display_schema": [
+                {{"name": "col_name", "type": "Type", "description": "Short explanation (less than a sentence)."}}
+            ]
+        }}
+        """
+        return llm_service.generate_json(prompt, api_key, temperature=0.5) # Lower temp for strict adherence
+
     # Legacy wrapper for compatibility if needed, but we will update app.py
     def generate_project_definition(self, sector: str, api_key: str = None, previous_context: list = None):
         return self.orchestrate_project_generation(sector, api_key, previous_context)
