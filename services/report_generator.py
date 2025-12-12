@@ -2,6 +2,7 @@ import markdown
 import pandas as pd
 import io
 import base64
+import html
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
@@ -62,27 +63,10 @@ def generate_html_report(project_title, project_description, cells):
             color: #444;
         }
 
-        .cell {
-            margin-bottom: 35px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-            background-color: #fff;
+        /* Content Blocks */
+        .content-block {
+            margin-bottom: 25px;
         }
-
-        .cell-type-label {
-            background-color: #f1f3f5;
-            padding: 8px 15px;
-            font-size: 0.75rem;
-            color: #666;
-            border-bottom: 1px solid var(--border-color);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .cell-content { padding: 20px; }
 
         .code-block {
             background-color: var(--code-bg);
@@ -92,14 +76,13 @@ def generate_html_report(project_title, project_description, cells):
             overflow-x: auto;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             color: #24292e;
         }
 
         .output-block {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px dashed var(--border-color);
+            margin-top: 10px;
+            padding-left: 5px;
         }
 
         .error {
@@ -167,6 +150,13 @@ def generate_html_report(project_title, project_description, cells):
             border-top: 1px solid var(--border-color);
             padding-top: 20px;
         }
+
+        .truncation-notice {
+            font-size: 0.8em;
+            color: #666;
+            font-style: italic;
+            margin-bottom: 5px;
+        }
     </style>
     """
 
@@ -193,9 +183,8 @@ def generate_html_report(project_title, project_description, cells):
         result = cell.get('result')
         output = cell.get('output')
 
-        html_content.append(f'<div class="cell" id="cell-{i}">')
-        html_content.append(f'<div class="cell-type-label">{cell_type}</div>')
-        html_content.append('<div class="cell-content">')
+        # Wrapper only for spacing, no visual box
+        html_content.append(f'<div class="content-block" id="cell-{i}">')
 
         # 1. Cell Content (Source)
         if cell_type == 'markdown':
@@ -203,7 +192,8 @@ def generate_html_report(project_title, project_description, cells):
             html_content.append(f'<div class="text-content">{markdown.markdown(content)}</div>')
         else:
             # Code/SQL source
-            html_content.append(f'<div class="code-block"><pre>{content}</pre></div>')
+            escaped_content = html.escape(content)
+            html_content.append(f'<div class="code-block"><pre>{escaped_content}</pre></div>')
 
         # 2. Cell Output/Result
         if cell_type != 'markdown':
@@ -212,18 +202,19 @@ def generate_html_report(project_title, project_description, cells):
 
                 # Text Output (stdout/stderr)
                 if output:
+                    escaped_output = html.escape(output)
                     # Check if output looks like an error
                     if "Error" in output or "Exception" in output:
-                        html_content.append(f'<div class="error"><pre>{output}</pre></div>')
+                        html_content.append(f'<div class="error"><pre>{escaped_output}</pre></div>')
                     else:
-                        html_content.append(f'<pre>{output}</pre>')
+                        html_content.append(f'<pre>{escaped_output}</pre>')
 
                 # Result Object
                 if result is not None:
                     # Pandas DataFrame
                     if isinstance(result, pd.DataFrame):
                         if len(result) > 100:
-                            html_content.append(f'<div class="cell-type-label" style="background: none; border: none; padding-left: 0; margin-bottom: 5px;">DataFrame (First 100 rows)</div>')
+                            html_content.append(f'<div class="truncation-notice">DataFrame (First 100 rows)</div>')
                             html_content.append(result.head(100).to_html(classes='dataframe', index=False, border=0))
                         else:
                             html_content.append(result.to_html(classes='dataframe', index=False, border=0))
@@ -250,11 +241,12 @@ def generate_html_report(project_title, project_description, cells):
                     # DuckDB/Pandas Series/Other objects
                     else:
                         # Fallback to string representation
-                        html_content.append(f'<pre>{str(result)}</pre>')
+                        escaped_result = html.escape(str(result))
+                        html_content.append(f'<pre>{escaped_result}</pre>')
 
                 html_content.append('</div>') # End output-block
 
-        html_content.append('</div></div>') # End cell-content, cell
+        html_content.append('</div>') # End content-block
 
     html_content.append("""
         <div class="footer">
