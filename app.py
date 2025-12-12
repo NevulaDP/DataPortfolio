@@ -17,6 +17,7 @@ from services.generator import project_generator
 from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
 from services.report_generator import generate_html_report
+from services.verifier import VerifierService
 
 # --- Page Config ---
 st.set_page_config(
@@ -48,9 +49,12 @@ if 'processing_chat' not in st.session_state:
 # Track history of generated project titles/companies to prevent repetition
 if 'generated_history' not in st.session_state:
     st.session_state.generated_history = []
+if 'verification_result' not in st.session_state:
+    st.session_state.verification_result = None
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
+verifier_service = VerifierService()
 
 # --- Custom CSS for Layout ---
 st.markdown("""
@@ -289,23 +293,62 @@ def generate_project():
             # Pass history to prevent repetition
             history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
-            # Use the new orchestration method
-            definition = project_generator.orchestrate_project_generation(
+            # Step 1: Generate Narrative (Fixed)
+            narrative = project_generator._generate_scenario_narrative(
                 st.session_state.sector_input,
                 st.session_state.api_key,
                 previous_context=history_context
             )
 
-            if "error" in definition:
-                st.error(definition["error"])
+            if "error" in narrative:
+                st.error(narrative["error"])
                 return
 
-            if 'recipe' in definition:
-                df = project_generator.generate_dataset(definition['recipe'], rows=10000)
-            else:
-                st.error("Invalid recipe format received from AI.")
-                return
+            # Step 2: Generate Recipe & Data (Loop for correction)
+            max_retries = 3
+            current_try = 0
+            definition = None
+            df = None
+            verification = None
 
+            while current_try < max_retries:
+                if current_try == 0:
+                    # Initial Recipe Generation
+                    definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
+                else:
+                    # Refinement based on feedback
+                    st.toast(f"Refining data recipe (Attempt {current_try+1})...", icon="🔄")
+                    definition = project_generator.refine_data_recipe(
+                        narrative,
+                        verification['issues'],
+                        st.session_state.api_key
+                    )
+
+                if "error" in definition:
+                    st.error(definition["error"])
+                    return
+
+                if 'recipe' in definition:
+                    df = project_generator.generate_dataset(definition['recipe'], rows=10000)
+                else:
+                    st.error("Invalid recipe format received from AI.")
+                    return
+
+                # Verify
+                verification = verifier_service.verify_dataset_schema(
+                    definition,
+                    df,
+                    st.session_state.api_key
+                )
+
+                # Check Validity
+                if verification.get('valid', True):
+                    break # Success!
+
+                current_try += 1
+
+            # Store Final Results (even if invalid after max retries)
+            st.session_state.verification_result = verification
             st.session_state.project = {
                 "definition": definition,
                 "data": df
@@ -766,6 +809,18 @@ def render_workspace():
     # --- Notebook (Right Column) ---
     with col_work:
         st.title("Workspace")
+
+        # Display Verification Alert if there are issues
+        ver_res = st.session_state.get('verification_result')
+        if ver_res and not ver_res.get('valid', True):
+            st.error(f"⚠️ Data Issues Detected (Score: {ver_res.get('score', 0)})")
+            for issue in ver_res.get('issues', []):
+                st.markdown(f"- {issue}")
+        elif ver_res and ver_res.get('valid', True) and ver_res.get('issues'):
+             with st.expander(f"✅ Data Verified (Score: {ver_res.get('score', 100)}) - Click to see notes"):
+                for issue in ver_res.get('issues', []):
+                    st.markdown(f"- {issue}")
+
         if df is not None:
             # Data Preview
             st.subheader("Data Preview")
