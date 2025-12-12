@@ -789,7 +789,8 @@ def render_workspace():
                     html_report,
                     "project_report.html",
                     "text/html",
-                    use_container_width=True
+                    use_container_width=True,
+                    help="To include a chart in the report, ensure the figure object (e.g., `fig`) is the last line of the cell."
                 )
 
         st.divider()
