@@ -34,41 +34,44 @@ class ProjectGenerator:
 
         # 1. Project Archetypes (Analysis Types)
         archetypes = [
-            # Retail/General Business
+            # General / Retail / Business
             "Sales Trend Analysis (identifying seasonal patterns and top performers)",
             "Customer Segmentation & Profiling (grouping users by behavior)",
             "Product Performance Review (analyzing sales vs returns)",
             "Customer Churn Analysis (identifying at-risk customers)",
             "Pricing & Discount Analysis (impact of discounts on revenue)",
-            "Marketing Campaign Performance (ROI and conversion rates)",
+            "Marketing & Acquisition Performance (ROI and conversion rates)",
             "Inventory Turnover & Stock Analysis (identifying slow-moving items)",
             "Operational KPI Dashboarding (tracking core business metrics)",
 
-            # AdTech / High Tech / SaaS
-            "Ad Campaign Performance & Attribution (CTR, CPC, Conversion analysis)",
-            "Feature Usage & Adoption Analysis (SaaS product metrics)",
+            # Tech / Digital
+            "Product/Service Usage Trends (adoption and engagement metrics)",
             "A/B Test Result Analysis (comparing control vs variant groups)",
-            "User Engagement & Session Analysis (time on site, bounce rates)",
+            "User Session & Behavior Analysis (time on site, drop-off points)",
+            "Model/System Performance Analysis (Accuracy, Error Rates, Efficiency)", # Added for AI/Tech
 
-            # General
-            "Anomaly Detection (investigating data irregularities)"
+            # Wildcards & Anomaly
+            "Anomaly Detection (investigating data irregularities)",
+            "Sector-Specific Operational Challenge (a unique problem relevant strictly to this industry)"
         ]
 
         # 2. Business Contexts (Scale/Stage)
         contexts = [
-            "A rapidly scaling tech startup running out of runway",
+            "A rapidly scaling high-growth startup",
             "A stable, family-owned business trying to modernize",
             "A large legacy corporation facing a PR crisis",
-            "A non-profit organization struggling with donor retention",
-            "A high-volume e-commerce giant facing stiff competition",
-            "A boutique luxury brand expanding to mass market",
-            "A B2B SaaS platform focused on user retention",
-            "A digital media agency optimizing ad spend for clients"
+            "A non-profit organization struggling with resource allocation",
+            "A high-volume consumer business facing stiff competition",
+            "A premium/boutique brand expanding to mass market",
+            "A B2B service provider focused on client retention",
+            "A data-driven agency optimizing performance for clients"
         ]
 
-        # Select one of each
-        selected_archetype = random.choice(archetypes)
+        # Select one Context randomly (this is safe to randomise)
         selected_context = random.choice(contexts)
+
+        # For Archetypes, we provide the LIST to the LLM and let IT choose relevant vs random.
+        archetypes_str = "\n".join([f"- {a}" for a in archetypes])
 
         avoid_str = ""
         if previous_context:
@@ -80,21 +83,28 @@ class ProjectGenerator:
 
         **Target Audience:** Junior Data Analyst (Portfolio Project).
 
-        **Structural Constraints:**
-        1. **Client Profile:** {selected_context}.
-        2. **Core Data Task:** {selected_archetype}.
+        **Step 1: Context Selection**
+        Use this Client Profile: {selected_context}
 
-        **Goal:** Write a compelling backstory for this specific client and their problem.
+        **Step 2: Task Selection**
+        From the list below, select ONE Data Task that is logical for a '{sector}' company.
+        *Crucial:* To ensure variety, do not always pick the most obvious one. If multiple are logical, pick one at random.
+
+        [Archetype List]
+        {archetypes_str}
+
+        **Goal:** Write a compelling backstory for this specific client and their problem based on your selection.
 
         **Entropy Injection:**
         Random Seed: {random_seed}
         {avoid_str}
 
         **Guidelines:**
-        1. **Scope:** Focus on descriptive and diagnostic analysis (Trends, KPIs, Comparisons, Aggregations). Avoid complex predictive modeling, supply chain planning, or operations research tasks that are outside the scope of a Junior Data Analyst.
-        2. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
-        3. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
-        4. **Context:** Provide rich business details. *Why* is this specific analysis crucial right now?
+        1. **Relevance:** Ensure the selected task actually makes sense for the sector (e.g., don't pick 'Inventory Analysis' for a pure software company unless it involves hardware).
+        2. **Scope:** Focus on descriptive and diagnostic analysis (Trends, KPIs, Comparisons, Aggregations). Avoid complex predictive modeling, supply chain planning, or operations research tasks that are outside the scope of a Junior Data Analyst.
+        3. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
+        4. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
+        5. **Context:** Provide rich business details. *Why* is this specific analysis crucial right now?
 
         Output ONLY valid JSON:
         {{
