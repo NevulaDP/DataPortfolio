@@ -333,7 +333,23 @@ class ProjectGenerator:
             if hasattr(fake, method):
                 data[col_name] = [getattr(fake, method)() for _ in range(rows)]
             else:
-                data[col_name] = [fake.word() for _ in range(rows)]
+                # Fallback: Try to find a relevant Faker method based on keywords
+                method_lower = method.lower()
+                fallback_method = None
+
+                if 'country' in method_lower: fallback_method = 'country'
+                elif 'city' in method_lower: fallback_method = 'city'
+                elif 'name' in method_lower: fallback_method = 'name'
+                elif 'email' in method_lower: fallback_method = 'email'
+                elif 'date' in method_lower: fallback_method = 'date_this_year'
+                elif 'job' in method_lower: fallback_method = 'job'
+                elif 'company' in method_lower: fallback_method = 'company'
+                elif 'address' in method_lower: fallback_method = 'address'
+
+                if fallback_method and hasattr(fake, fallback_method):
+                    data[col_name] = [getattr(fake, fallback_method)() for _ in range(rows)]
+                else:
+                    data[col_name] = [fake.word() for _ in range(rows)]
 
         df = pd.DataFrame(data)
 

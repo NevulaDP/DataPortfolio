@@ -47,10 +47,16 @@ class VerifierService:
         **Your Goal:**
         Verify if the **Actual Data** matches the **Expected Schema** and is sufficient to solve the **Tasks**.
 
-        Specific Checks:
-        1. **Type Mismatches:** Does the column content match the description? (e.g., If description says "User's full name" but data is "True/False", that is a FAIL).
-        2. **Task Feasibility:** Do the columns needed for the tasks exist and contain usable data?
-        3. **Consistency:** Does the data look relevant to the scenario?
+        **CRITICAL INSTRUCTION - IGNORE INTENTIONAL MESSINESS:**
+        This is a dataset for a *Junior Analyst Portfolio Project*. It is *supposed* to be imperfect.
+        - **IGNORE** Logical Flaws (e.g., "Install date after Login date", "Negative duration"). This is for the analyst to clean.
+        - **IGNORE** Dirty Data / Outliers (e.g., "Country" column has some random strings or nulls). This is for the analyst to clean.
+        - **IGNORE** Format Inconsistencies (e.g., Dates as strings).
+
+        **FOCUS ONLY ON BLOCKERS:**
+        1. **Critical Type Mismatches:** (e.g., Schema says "String/Name" but data is strictly "True/False" booleans). This is a FAIL.
+        2. **Missing Columns:** If a column required for a task is missing. This is a FAIL.
+        3. **Total Garbage:** If the column contains data that is *completely* unusable for the intended task (e.g. "Revenue" column containing only names).
 
         Output a valid JSON object:
         {{
