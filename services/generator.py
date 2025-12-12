@@ -286,6 +286,8 @@ class ProjectGenerator:
                 if rule is None:
                     if col_type == 'numeric':
                         val = np.random.randint(0, 100)
+                    elif col_type == 'string' or col_type == 'categorical':
+                        val = fake.word()
                     else:
                         val = random.choice([True, False])
                 else:
@@ -299,6 +301,12 @@ class ProjectGenerator:
                     elif col_type == 'boolean':
                         prob = rule if isinstance(rule, (int, float)) else 0.5
                         val = np.random.random() < prob
+                    elif col_type == 'string' or col_type == 'categorical':
+                         # If a rule exists for string but it's not handled specifically, just use the rule value if it's a string, or fallback
+                        if isinstance(rule, str):
+                            val = rule
+                        else:
+                            val = fake.word()
                     else:
                         val = None
                 values.append(val)
