@@ -36,18 +36,18 @@ class ProjectGenerator:
 
         prompt = f"""
         Act as an expert Creative Writer and Data Science Mentor.
-        Create a unique, detailed scenario for a Data Analysis project in the '{sector}' sector.
+        Create a unique, detailed, and non-generic scenario for a Data Analysis project in the '{sector}' sector.
 
-        **Goal:** Write a compelling backstory for a company facing a specific data problem.
+        **Goal:** Write a compelling backstory for a company facing a specific, urgent data problem.
 
         **Entropy Injection:**
         Random Seed: {random_seed}
         {avoid_str}
 
         **Guidelines:**
-        1. **Company:** Invent a unique name. Do NOT use generic names.
-        2. **Problem:** Be specific. Is it Fraud? Supply Chain? Churn? Ad Spend?
-        3. **Context:** Provide rich details about the situation.
+        1. **Creativity:** Do NOT use standard, boring tropes (e.g., just "Sales Analysis"). Be specific, weird, or niche if possible.
+        2. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A" or "Retail Corp".
+        3. **Context:** Provide rich details about the business situation. Is it a startup running out of runway? A legacy brand facing a PR crisis? A non-profit struggling with donor retention?
 
         Output ONLY valid JSON:
         {{
