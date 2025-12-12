@@ -56,15 +56,16 @@ class ProjectGenerator:
         ]
 
         # 2. Business Contexts (Scale/Stage)
+        # Refined to be PURELY OPERATIONAL (No implied business models like 'SaaS' or 'Agency')
         contexts = [
             "A rapidly scaling high-growth startup",
             "A stable, family-owned business trying to modernize",
             "A large legacy corporation facing a PR crisis",
             "A non-profit organization struggling with resource allocation",
-            "A high-volume consumer business facing stiff competition",
-            "A premium/boutique brand expanding to mass market",
-            "A B2B service provider focused on client retention",
-            "A data-driven agency optimizing performance for clients"
+            "A company recently acquired by a larger firm", # New: Operational State
+            "A company preparing for an IPO or major funding round", # New: Operational State
+            "A company expanding into a new international market", # New: Operational State
+            "A market leader facing stiff competition from a disruptor"
         ]
 
         # Select one Context randomly (this is safe to randomise)
@@ -85,12 +86,18 @@ class ProjectGenerator:
 
         **Step 1: Context Selection**
         Use this Client Profile: {selected_context}
+        *Crucial:* The Client Profile describes the *situation* (e.g., Startup, Crisis). The Company's *actual industry* must be '{sector}'.
+        (e.g., If sector is 'Fintech' and profile is 'Rapidly Scaling', the company is a Fintech Startup, NOT a generic SaaS).
 
         **Step 2: Task Selection**
-        From the list below, select ONE Data Task that is logical for a '{sector}' company.
-        *Crucial:* To ensure variety, do not always pick the most obvious one. If multiple are logical, pick one at random.
+        Below is a list of *Suggested Data Tasks* for inspiration.
+        Select ONE Data Task that is highly relevant to a '{sector}' company.
+        *Crucial:*
+        - You may choose one from the list below if it fits well.
+        - OR, **you may invent a completely different Data Task** if none of the suggestions fit the specific nuances of the '{sector}' sector perfectly.
+        - Do not force an irrelevant task (e.g., don't pick 'Inventory' for a pure software company).
 
-        [Archetype List]
+        [Suggested Archetypes]
         {archetypes_str}
 
         **Goal:** Write a compelling backstory for this specific client and their problem based on your selection.
@@ -100,7 +107,7 @@ class ProjectGenerator:
         {avoid_str}
 
         **Guidelines:**
-        1. **Relevance:** Ensure the selected task actually makes sense for the sector (e.g., don't pick 'Inventory Analysis' for a pure software company unless it involves hardware).
+        1. **Relevance:** Ensure the selected task is logical for the sector.
         2. **Scope:** Focus on descriptive and diagnostic analysis (Trends, KPIs, Comparisons, Aggregations). Avoid complex predictive modeling, supply chain planning, or operations research tasks that are outside the scope of a Junior Data Analyst.
         3. **Creativity:** Make it interesting, but keep it grounded in reality. Avoid sci-fi or overly magical elements unless the sector strictly demands it.
         4. **Company:** Invent a unique, memorable name. Do NOT use generic names like "Company A".
