@@ -101,7 +101,7 @@ class ProjectGenerator:
                 ]
             }},
             "display_schema": [
-                {{"name": "col_name", "type": "Type", "description": "Desc"}}
+                {{"name": "col_name", "type": "Type", "description": "Short explanation (less than a sentence)."}}
             ]
         }}
         """

@@ -739,8 +739,28 @@ def render_workspace():
 
         with st.expander("Data Schema"):
             schema = definition.get('display_schema', definition.get('schema', []))
-            for col in schema:
-                st.write(f"**{col['name']}** ({col['type']})")
+            if schema:
+                # Prepare data for display
+                schema_data = []
+                for col in schema:
+                    schema_data.append({
+                        "Column": col['name'],
+                        "Type": col['type'],
+                        "Description": col.get('description', '')
+                    })
+
+                st.dataframe(
+                    schema_data,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Column": st.column_config.TextColumn("Column", width="small"),
+                        "Type": st.column_config.TextColumn("Type", width="small"),
+                        "Description": st.column_config.TextColumn("Description", width="large")
+                    }
+                )
+            else:
+                st.write("No schema information available.")
 
     # --- Notebook (Right Column) ---
     with col_work:
