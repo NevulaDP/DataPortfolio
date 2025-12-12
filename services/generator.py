@@ -141,6 +141,11 @@ class ProjectGenerator:
         2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
         3. **Tasks:** Define 3-5 analysis questions solvable with this data (Focus on SQL/Pandas aggregation and visualization).
 
+        **Constraint on Calculated Columns:**
+        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
+        - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
+        - This prevents data consistency errors.
+
         Output a JSON merging the scenario and the recipe:
         {{
             "title": "{narrative.get('title')}",
@@ -204,6 +209,11 @@ class ProjectGenerator:
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
         2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
         3. **Tasks:** Define 3-5 analysis questions solvable with this data.
+
+        **Constraint on Calculated Columns:**
+        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
+        - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
+        - This prevents data consistency errors.
 
         Output a JSON merging the scenario and the recipe:
         {{
@@ -333,7 +343,23 @@ class ProjectGenerator:
             if hasattr(fake, method):
                 data[col_name] = [getattr(fake, method)() for _ in range(rows)]
             else:
-                data[col_name] = [fake.word() for _ in range(rows)]
+                # Fallback: Try to find a relevant Faker method based on keywords
+                method_lower = method.lower()
+                fallback_method = None
+
+                if 'country' in method_lower: fallback_method = 'country'
+                elif 'city' in method_lower: fallback_method = 'city'
+                elif 'name' in method_lower: fallback_method = 'name'
+                elif 'email' in method_lower: fallback_method = 'email'
+                elif 'date' in method_lower: fallback_method = 'date_this_year'
+                elif 'job' in method_lower: fallback_method = 'job'
+                elif 'company' in method_lower: fallback_method = 'company'
+                elif 'address' in method_lower: fallback_method = 'address'
+
+                if fallback_method and hasattr(fake, fallback_method):
+                    data[col_name] = [getattr(fake, fallback_method)() for _ in range(rows)]
+                else:
+                    data[col_name] = [fake.word() for _ in range(rows)]
 
         df = pd.DataFrame(data)
 
