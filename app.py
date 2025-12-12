@@ -16,6 +16,7 @@ from streamlit_float import *
 from services.generator import project_generator
 from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
+from services.report_generator import generate_html_report
 
 # --- Page Config ---
 st.set_page_config(
@@ -772,7 +773,24 @@ def render_workspace():
 
             # Download
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Data", csv, "project_data.csv", "text/csv")
+
+            c_d1, c_d2 = st.columns([1, 1])
+            with c_d1:
+                st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
+            with c_d2:
+                # Generate Report
+                html_report = generate_html_report(
+                    definition['title'],
+                    definition['description'],
+                    st.session_state.notebook_cells
+                )
+                st.download_button(
+                    "Download Report 📄",
+                    html_report,
+                    "project_report.html",
+                    "text/html",
+                    use_container_width=True
+                )
 
         st.divider()
 
