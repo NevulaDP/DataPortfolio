@@ -276,6 +276,7 @@ class ProjectGenerator:
         for col in recipe.get('correlated_columns', []):
             col_name = self._sanitize_column_name(col['name'])
             col_type = col['type']
+            col_type_clean = col_type.lower()
             rules = col['rules']
 
             values = []
@@ -283,32 +284,43 @@ class ProjectGenerator:
                 anchor_val = data[anchor_name][i]
                 rule = rules.get(anchor_val, rules.get('default'))
 
+                # --- Helper logic to generate value based on type string ---
+                def get_val_by_type(t_str, r=None):
+                    # Numeric
+                    if any(x in t_str for x in ['int', 'numeric', 'float', 'money', 'currency']):
+                         if r and isinstance(r, dict):
+                             min_v = r.get('min', 0)
+                             max_v = r.get('max', 100)
+                             if 'float' in t_str or isinstance(min_v, float) or isinstance(max_v, float):
+                                 return np.random.uniform(min_v, max_v)
+                             else:
+                                 return np.random.randint(min_v, max_v + 1)
+                         else:
+                             if 'float' in t_str: return np.random.uniform(0, 100)
+                             return np.random.randint(0, 100)
+
+                    # Boolean
+                    elif 'bool' in t_str:
+                        prob = 0.5
+                        if r is not None and isinstance(r, (int, float)):
+                            prob = r
+                        return np.random.random() < prob
+
+                    # Date
+                    elif any(x in t_str for x in ['date', 'time']):
+                        return fake.date_this_year()
+
+                    # String/Categorical/Default
+                    else:
+                        if r and isinstance(r, str):
+                            return r
+                        return fake.word()
+
                 if rule is None:
-                    if col_type == 'numeric':
-                        val = np.random.randint(0, 100)
-                    elif col_type == 'string' or col_type == 'categorical':
-                        val = fake.word()
-                    else:
-                        val = random.choice([True, False])
+                     val = get_val_by_type(col_type_clean)
                 else:
-                    if col_type == 'numeric':
-                        min_v = rule.get('min', 0)
-                        max_v = rule.get('max', 100)
-                        if isinstance(min_v, float) or isinstance(max_v, float):
-                            val = np.random.uniform(min_v, max_v)
-                        else:
-                            val = np.random.randint(min_v, max_v + 1)
-                    elif col_type == 'boolean':
-                        prob = rule if isinstance(rule, (int, float)) else 0.5
-                        val = np.random.random() < prob
-                    elif col_type == 'string' or col_type == 'categorical':
-                         # If a rule exists for string but it's not handled specifically, just use the rule value if it's a string, or fallback
-                        if isinstance(rule, str):
-                            val = rule
-                        else:
-                            val = fake.word()
-                    else:
-                        val = None
+                     val = get_val_by_type(col_type_clean, rule)
+
                 values.append(val)
 
             data[col_name] = values
