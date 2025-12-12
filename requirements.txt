@@ -11,3 +11,4 @@ streamlit-code-editor
 duckdb
 streamlit-quill
 streamlit-float
+markdown
