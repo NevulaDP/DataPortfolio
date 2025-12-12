@@ -141,6 +141,11 @@ class ProjectGenerator:
         2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
         3. **Tasks:** Define 3-5 analysis questions solvable with this data (Focus on SQL/Pandas aggregation and visualization).
 
+        **Constraint on Calculated Columns:**
+        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
+        - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
+        - This prevents data consistency errors.
+
         Output a JSON merging the scenario and the recipe:
         {{
             "title": "{narrative.get('title')}",
@@ -204,6 +209,11 @@ class ProjectGenerator:
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
         2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
         3. **Tasks:** Define 3-5 analysis questions solvable with this data.
+
+        **Constraint on Calculated Columns:**
+        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
+        - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
+        - This prevents data consistency errors.
 
         Output a JSON merging the scenario and the recipe:
         {{
