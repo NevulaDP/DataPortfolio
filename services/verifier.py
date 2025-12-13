@@ -18,7 +18,13 @@ class VerifierService:
         title = project_definition.get('title', 'N/A')
         description = project_definition.get('description', 'N/A')
         tasks = project_definition.get('tasks', [])
-        display_schema = project_definition.get('display_schema', [])
+
+        # Handle Schema-First vs Legacy
+        if 'schema_list' in project_definition:
+            # For new format, schema_list IS the display schema
+            display_schema = project_definition.get('schema_list', [])
+        else:
+            display_schema = project_definition.get('display_schema', [])
 
         # Data Sample
         sample_head = df.head(5).to_string(index=False)
