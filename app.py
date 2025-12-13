@@ -328,7 +328,14 @@ def generate_project():
                     st.error(definition["error"])
                     return
 
-                if 'recipe' in definition:
+                # Handle new "Schema-First" format (schema_list at root) vs Legacy (recipe key)
+                if 'schema_list' in definition:
+                    # Inject granularity manually if missing from LLM output but present in narrative
+                    if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
+                        definition['dataset_granularity'] = narrative['dataset_granularity']
+                    df = project_generator.generate_dataset(definition, rows=10000)
+                elif 'recipe' in definition:
+                    # Legacy fallback
                     df = project_generator.generate_dataset(definition['recipe'], rows=10000)
                 else:
                     st.error("Invalid recipe format received from AI.")
