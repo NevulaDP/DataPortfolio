@@ -479,7 +479,9 @@ class ProjectGenerator:
 
                     # Fallback
                     else:
-                        return fake.word()
+                        # Fallback for unknown numeric types (often categorical strings put in numeric_columns by mistake)
+                        clean_title = col_name.replace('_', ' ').title()
+                        return f"{clean_title} {random.choice(['A', 'B', 'C', 'D', 'E'])}"
 
                 if rule is None:
                      val = get_val_by_type(col_type_clean)
@@ -502,7 +504,7 @@ class ProjectGenerator:
             is_generic_method = method.lower() in ['word', 'words', 'sentence', 'text', 'lorem', 'string', 'random_element', 'random_letter']
 
             # Keywords that strongly suggest this should be a categorical column (finite set)
-            categorical_keywords = ['status', 'type', 'category', 'class', 'tier', 'mode', 'segment', 'group', 'level', 'priority', 'region', 'department']
+            categorical_keywords = ['status', 'type', 'category', 'class', 'tier', 'mode', 'segment', 'group', 'level', 'priority', 'region', 'department', 'platform', 'channel', 'source', 'medium', 'plan']
             name_implies_category = any(k in col_name.lower() for k in categorical_keywords)
 
             # If it's a generic method AND (it implies category OR it's just 'word'), we intercept.
