@@ -26,6 +26,11 @@ class ProjectGenerator:
 
         # Step 2: Generate Data Recipe from Narrative
         full_project = self._generate_data_recipe(narrative, api_key)
+
+        # Merge Granularity from Narrative to Recipe (Manual Injection)
+        if "dataset_granularity" in narrative:
+            full_project["dataset_granularity"] = narrative["dataset_granularity"]
+
         return full_project
 
     def _generate_scenario_narrative(self, sector: str, api_key: str, previous_context: list):
@@ -85,6 +90,9 @@ class ProjectGenerator:
 
         **Target Audience:** Junior Data Analyst (Portfolio Project).
 
+        **Step 0: Define Granularity**
+        Explicitly define what a single row in the dataset represents (e.g., "Each row represents a single customer transaction," "Each row represents a daily inventory snapshot," etc.). This is crucial for the data schema design.
+
         **Step 1: Context Selection**
         Use this Client Profile: {selected_context}
         *Crucial:* The Client Profile describes the *situation* (e.g., Startup, Crisis). The Company's *actual industry* must be '{sector}'.
@@ -119,7 +127,8 @@ class ProjectGenerator:
             "title": "Creative Project Title",
             "company_name": "Name",
             "business_problem": "Short description of the core problem",
-            "description": "Detailed 3-4 sentence backstory."
+            "description": "Detailed 3-4 sentence backstory.",
+            "dataset_granularity": "Each row represents..."
         }}
         """
         return llm_service.generate_json(prompt, api_key, temperature=0.95)
@@ -133,16 +142,17 @@ class ProjectGenerator:
         **Company:** {narrative.get('company_name')}
         **Problem:** {narrative.get('business_problem')}
         **Description:** {narrative.get('description')}
+        **Row Granularity:** {narrative.get('dataset_granularity', 'Not specified')}
 
         **Task:** Design a synthetic dataset schema (recipe) that perfectly matches this scenario.
 
         **Requirements:**
         1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
-        2. **Categorical Columns (Priority):** Identify ALL columns that represent categories, statuses, types, priorities, or labels.
-           - You MUST explicitly list the valid options for these columns (e.g. `["Low", "Medium", "High"]` for Priority).
-           - **DO NOT** use `faker_columns` for these fields (e.g. 'Department', 'Region', 'Payment Method'), as Faker often generates random nonsense for them. Use this section instead.
-           - Ensure the options are realistic for the industry.
+        2. **Categorical Columns (Priority):** Identify ALL columns that represent categories, statuses, types, priorities, labels, platforms, or regions.
+           - **RULE:** If a column represents a concept with a finite set of possibilities (e.g., "Platform", "Region", "Tier", "Category", "Status", "Department"), it **MUST** be a `categorical_column` with a defined list of options.
+           - **STRICT FORBIDDEN:** You must NOT use `faker_columns` for these types of fields. Faker generates random nonsense (e.g. random words) for concepts like 'Department' or 'Region'.
+           - Explicitly list the valid options for each categorical column.
         3. **Date Columns:** Define date columns. **Crucially**, if dates must follow a logic (e.g. 'shipped_at' must be after 'created_at'), define this dependency.
            - Use 'base' type for independent dates.
            - Use 'dependent' type for dates that follow another date, with an offset in days.
@@ -202,7 +212,7 @@ class ProjectGenerator:
                 "faker_columns": [
                     {{"name": "customer_name", "faker_method": "name"}},
                     {{"name": "email", "faker_method": "email"}},
-                    {{"name": "address", "faker_method": "address"}}
+                    {{"name": "transaction_id", "faker_method": "uuid4"}}
                 ]
             }},
             "display_schema": [
@@ -231,13 +241,14 @@ class ProjectGenerator:
         - You MUST keep the same Scenario (Title, Company, Problem).
         - You MUST fix the specific schema/type mismatches mentioned above.
         - Ensure 'date_columns' logic prevents date paradoxes.
-        - Ensure 'categorical_columns' are used for ALL finite sets (Status, Type, Region, Department) to avoid random Faker data.
+        - **STRICT RULE:** Ensure 'categorical_columns' are used for ALL finite sets (Status, Type, Region, Department, Platform, Tier). **DO NOT** use `faker_columns` for these. `faker_columns` are ONLY for high-cardinality unique IDs (Name, Email, UUID).
 
         **Project Scenario (DO NOT CHANGE):**
         **Title:** {narrative.get('title')}
         **Company:** {narrative.get('company_name')}
         **Problem:** {narrative.get('business_problem')}
         **Description:** {narrative.get('description')}
+        **Row Granularity:** {narrative.get('dataset_granularity', 'Not specified')}
 
         **Task:** Design a corrected synthetic dataset schema (recipe).
 

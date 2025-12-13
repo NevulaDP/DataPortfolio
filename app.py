@@ -774,6 +774,8 @@ def render_workspace():
         <div class="scenario-box">
             <div class="scenario-title">{definition['title']}</div>
             <p>{definition['description']}</p>
+            <hr style="border-color: #555;">
+            <p style="font-size: 0.9rem; color: #aaa;"><strong>Dataset Granularity:</strong> {definition.get('dataset_granularity', 'Not specified')}</p>
         </div>
         """, unsafe_allow_html=True)
 
