@@ -4,6 +4,7 @@ from faker import Faker
 import random
 import json
 import re
+from datetime import datetime, timedelta
 from .llm import LLMService
 from .chaos import ChaosToolkit
 
@@ -138,13 +139,18 @@ class ProjectGenerator:
         **Requirements:**
         1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
-        2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
-        3. **Tasks:** Define 3-5 analysis questions solvable with this data (Focus on SQL/Pandas aggregation and visualization).
+        2. **Categorical Columns:** Identify columns with a limited set of valid values (e.g. 'Status', 'Region', 'Department', 'Payment Method').
+           - Explicitly list the allowed options and their probabilities (weights).
+           - This is critical to avoid nonsense data.
+        3. **Date Columns:** Define date columns. **Crucially**, if dates must follow a logic (e.g. 'shipped_at' must be after 'created_at'), define this dependency.
+           - Use 'base' type for independent dates.
+           - Use 'dependent' type for dates that follow another date, with an offset in days.
+        4. **Correlated/Numeric Columns:** Columns that depend on the Anchor Entity (e.g. Price depends on Product).
+        5. **Tasks:** Define 3-5 analysis questions.
 
         **Constraint on Calculated Columns:**
-        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
+        - **Do NOT** include calculated/derived columns (e.g., "profit", "days_to_ship") in the dataset. Provide raw data instead.
         - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
-        - This prevents data consistency errors.
 
         Output a JSON merging the scenario and the recipe:
         {{
@@ -157,16 +163,39 @@ class ProjectGenerator:
                     "options": ["List", "of", "REAL", "examples"],
                     "weights": [0.1, 0.2, "etc (sum to 1)"]
                 }},
-                "correlated_columns": [
+                "categorical_columns": [
                     {{
-                        "name": "column_name_snake_case",
-                        "type": "numeric/boolean",
+                        "name": "status",
+                        "options": ["Pending", "Shipped", "Delivered"],
+                        "weights": [0.1, 0.3, 0.6]
+                    }}
+                ],
+                "date_columns": [
+                    {{
+                        "name": "signup_date",
+                        "type": "base",
+                        "range_start": "2023-01-01",
+                        "range_end": "2023-12-31"
+                    }},
+                    {{
+                        "name": "last_login",
+                        "type": "dependent",
+                        "depends_on": "signup_date",
+                        "offset_days_min": 1,
+                        "offset_days_max": 30
+                    }}
+                ],
+                "numeric_columns": [
+                    {{
+                        "name": "price",
+                        "type": "numeric/integer",
                         "description": "Desc",
                         "rules": {{ "Option1": {{"min":0, "max":10}} }}
                     }}
                 ],
                 "faker_columns": [
-                    {{"name": "col_name", "faker_method": "name/date_this_year/city/email"}}
+                    {{"name": "customer_name", "faker_method": "name"}},
+                    {{"name": "email", "faker_method": "email"}}
                 ]
             }},
             "display_schema": [
@@ -194,7 +223,8 @@ class ProjectGenerator:
         **Constraint:**
         - You MUST keep the same Scenario (Title, Company, Problem).
         - You MUST fix the specific schema/type mismatches mentioned above.
-        - Ensure the 'display_schema' types match the 'recipe' generation logic (e.g., if you say 'String', do not generate booleans).
+        - Ensure 'date_columns' logic prevents date paradoxes.
+        - Ensure 'categorical_columns' are used for finite sets.
 
         **Project Scenario (DO NOT CHANGE):**
         **Title:** {narrative.get('title')}
@@ -204,18 +234,7 @@ class ProjectGenerator:
 
         **Task:** Design a corrected synthetic dataset schema (recipe).
 
-        **Requirements:**
-        1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
-           - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
-        2. **Correlated Columns:** Create columns that have logical relationships with the Anchor.
-        3. **Tasks:** Define 3-5 analysis questions solvable with this data.
-
-        **Constraint on Calculated Columns:**
-        - **Do NOT** include calculated/derived columns (e.g., "days_since_signup", "profit_margin", "age") in the dataset.
-        - Instead, provide the raw data (e.g., "signup_date", "revenue", "cost", "birthdate") and add a **Task** for the analyst to derive them.
-        - This prevents data consistency errors.
-
-        Output a JSON merging the scenario and the recipe:
+        Output a JSON merging the scenario and the recipe (same format as before):
         {{
             "title": "{narrative.get('title')}",
             "description": "{narrative.get('description')}",
@@ -226,16 +245,38 @@ class ProjectGenerator:
                     "options": ["List", "of", "REAL", "examples"],
                     "weights": [0.1, 0.2, "etc (sum to 1)"]
                 }},
-                "correlated_columns": [
+                "categorical_columns": [
                     {{
-                        "name": "column_name_snake_case",
-                        "type": "numeric/boolean",
+                        "name": "status",
+                        "options": ["Pending", "Shipped", "Delivered"],
+                        "weights": [0.1, 0.3, 0.6]
+                    }}
+                ],
+                "date_columns": [
+                    {{
+                        "name": "signup_date",
+                        "type": "base",
+                        "range_start": "2023-01-01",
+                        "range_end": "2023-12-31"
+                    }},
+                    {{
+                        "name": "last_login",
+                        "type": "dependent",
+                        "depends_on": "signup_date",
+                        "offset_days_min": 1,
+                        "offset_days_max": 30
+                    }}
+                ],
+                "numeric_columns": [
+                    {{
+                        "name": "price",
+                        "type": "numeric/integer",
                         "description": "Desc",
                         "rules": {{ "Option1": {{"min":0, "max":10}} }}
                     }}
                 ],
                 "faker_columns": [
-                    {{"name": "col_name", "faker_method": "name/date_this_year/city/email"}}
+                    {{"name": "col_name", "faker_method": "name/city/email"}}
                 ]
             }},
             "display_schema": [
@@ -243,9 +284,9 @@ class ProjectGenerator:
             ]
         }}
         """
-        return llm_service.generate_json(prompt, api_key, temperature=0.5) # Lower temp for strict adherence
+        return llm_service.generate_json(prompt, api_key, temperature=0.5)
 
-    # Legacy wrapper for compatibility if needed, but we will update app.py
+    # Legacy wrapper for compatibility if needed
     def generate_project_definition(self, sector: str, api_key: str = None, previous_context: list = None):
         return self.orchestrate_project_generation(sector, api_key, previous_context)
 
@@ -282,12 +323,111 @@ class ProjectGenerator:
 
         data[anchor_name] = np.random.choice(options, size=rows, p=weights)
 
-        # 2. Generate Correlated Columns
-        for col in recipe.get('correlated_columns', []):
+        # 2. Generate Categorical Columns (Independent)
+        for col in recipe.get('categorical_columns', []):
             col_name = self._sanitize_column_name(col['name'])
-            col_type = col['type']
+            opts = col['options']
+            wts = col.get('weights', [1.0/len(opts)]*len(opts))
+
+            try:
+                wts = [float(w) for w in wts]
+                total = sum(wts)
+                if abs(total - 1.0) > 0.01:
+                    wts = [w / total for w in wts]
+            except:
+                wts = [1.0/len(opts)] * len(opts)
+
+            data[col_name] = np.random.choice(opts, size=rows, p=wts)
+
+        # 3. Generate Date Columns (Base + Dependent)
+        date_cols = recipe.get('date_columns', [])
+
+        # Sort: Base columns first, then dependent
+        # A simple way is to process "base" first, then "dependent"
+        # If there are chains (A->B->C), we might need a loop or topological sort.
+        # Given the prompt instruction is simple (base vs dependent), 2 passes should suffice for now.
+        # But a while loop is safer for chains.
+
+        processed_dates = set()
+        pending_dates = [d for d in date_cols]
+
+        # Guard against infinite loops if dependencies are cyclic or missing
+        loop_counter = 0
+        max_loops = len(pending_dates) * 2
+
+        while pending_dates and loop_counter < max_loops:
+            loop_counter += 1
+            col = pending_dates.pop(0)
+            col_name = self._sanitize_column_name(col['name'])
+            dtype = col.get('type', 'base')
+
+            if dtype == 'base':
+                # Generate random dates in range
+                start_str = col.get('range_start', '2023-01-01')
+                end_str = col.get('range_end', '2023-12-31')
+                try:
+                    start_date = datetime.strptime(start_str, "%Y-%m-%d")
+                    end_date = datetime.strptime(end_str, "%Y-%m-%d")
+                    delta = (end_date - start_date).days
+
+                    random_days = np.random.randint(0, delta + 1, size=rows)
+                    # Vectorized date addition
+                    # We can't add int array to date object directly in standard python without pandas or numpy hacks
+                    # Using pd.to_datetime makes this easier
+                    base = pd.to_datetime(start_date)
+                    date_series = base + pd.to_timedelta(random_days, unit='D')
+
+                    if isinstance(date_series, pd.DatetimeIndex):
+                         data[col_name] = date_series.date
+                    else:
+                         data[col_name] = date_series.dt.date
+
+                except Exception as e:
+                    # Fallback
+                    data[col_name] = [fake.date_this_year() for _ in range(rows)]
+
+                processed_dates.add(col_name)
+
+            elif dtype == 'dependent':
+                dependency = self._sanitize_column_name(col.get('depends_on', ''))
+                if dependency in data:
+                    # Generate based on dependency
+                    min_off = col.get('offset_days_min', 0)
+                    max_off = col.get('offset_days_max', 30)
+
+                    offsets = np.random.randint(min_off, max_off + 1, size=rows)
+
+                    # Convert dependency to datetime if not already (it should be date objects)
+                    base_series = pd.to_datetime(data[dependency])
+                    new_series = base_series + pd.to_timedelta(offsets, unit='D')
+                    # If result is DatetimeIndex (happens if base_series is Index), it has no .dt accessor but has .date
+                    if isinstance(new_series, pd.DatetimeIndex):
+                        data[col_name] = new_series.date
+                    else:
+                        data[col_name] = new_series.dt.date
+
+                    processed_dates.add(col_name)
+                else:
+                    # Dependency not ready yet, push back to queue
+                    pending_dates.append(col)
+
+        # If any pending left (circular or missing dependency), force generate as base
+        for col in pending_dates:
+             col_name = self._sanitize_column_name(col['name'])
+             data[col_name] = [fake.date_this_year() for _ in range(rows)]
+
+
+        # 4. Generate Numeric/Correlated Columns (Linked to Anchor)
+        # Handle both old 'correlated_columns' and new 'numeric_columns' key for backward compat
+        numeric_cols = recipe.get('numeric_columns', [])
+        if not numeric_cols:
+            numeric_cols = recipe.get('correlated_columns', [])
+
+        for col in numeric_cols:
+            col_name = self._sanitize_column_name(col['name'])
+            col_type = col.get('type', 'numeric')
             col_type_clean = col_type.lower()
-            rules = col['rules']
+            rules = col.get('rules', {})
 
             values = []
             for i in range(rows):
@@ -316,14 +456,8 @@ class ProjectGenerator:
                             prob = r
                         return np.random.random() < prob
 
-                    # Date
-                    elif any(x in t_str for x in ['date', 'time']):
-                        return fake.date_this_year()
-
-                    # String/Categorical/Default
+                    # Fallback
                     else:
-                        if r and isinstance(r, str):
-                            return r
                         return fake.word()
 
                 if rule is None:
@@ -335,7 +469,7 @@ class ProjectGenerator:
 
             data[col_name] = values
 
-        # 3. Apply Fluff (Faker Columns)
+        # 5. Apply Fluff (Faker Columns)
         for col in recipe.get('faker_columns', []):
             col_name = self._sanitize_column_name(col['name'])
             method = col['faker_method']
@@ -363,20 +497,25 @@ class ProjectGenerator:
 
         df = pd.DataFrame(data)
 
-        # 4. Inject Chaos
+        # 6. Inject Chaos
+        # We need to construct a type map for the chaos tool
         col_types = {anchor_name: 'categorical'}
-        for col in recipe.get('correlated_columns', []):
+
+        for col in recipe.get('categorical_columns', []):
             clean_name = self._sanitize_column_name(col['name'])
-            col_types[clean_name] = col['type']
+            col_types[clean_name] = 'categorical'
+
+        for col in recipe.get('date_columns', []):
+            clean_name = self._sanitize_column_name(col['name'])
+            col_types[clean_name] = 'date'
+
+        for col in numeric_cols:
+            clean_name = self._sanitize_column_name(col['name'])
+            col_types[clean_name] = col.get('type', 'numeric')
+
         for col in recipe.get('faker_columns', []):
             clean_name = self._sanitize_column_name(col['name'])
-            method = col['faker_method']
-            if 'date' in method:
-                col_types[clean_name] = 'date'
-            elif 'year' in method:
-                col_types[clean_name] = 'numeric'
-            else:
-                col_types[clean_name] = 'string'
+            col_types[clean_name] = 'string' # Default for faker
 
         df = chaos.apply_chaos(df, col_types)
 
