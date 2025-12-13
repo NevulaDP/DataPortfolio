@@ -4,9 +4,13 @@ import sys
 from services.generator import project_generator
 
 # User provided API key
-API_KEY = "AIzaSyBwKZR0TLZqHP8l6F_lW1ZO_fE17Td4V_U"
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 def verify_sector_adherence():
+    if not API_KEY:
+        print("Error: GEMINI_API_KEY environment variable not set.")
+        sys.exit(1)
+
     print("Testing Sector Adherence for 'Fintech'...")
 
     history = []
