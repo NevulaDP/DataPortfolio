@@ -456,6 +456,11 @@ class ProjectGenerator:
             col_name = self._sanitize_column_name(col['name'])
             col_type = col.get('type', 'text').lower()
 
+            # PRIORITY CHECK: If options are explicitly provided, force categorical behavior
+            # This handles cases where LLM says type="text" or "string" but provides options.
+            if col.get('options') and len(col['options']) > 0:
+                col_type = 'categorical'
+
             # --- Categorical & Anchor ---
             if col_type in ['categorical', 'anchor']:
                 options = col.get('options', [])
