@@ -495,7 +495,24 @@ class ProjectGenerator:
             col_name = self._sanitize_column_name(col['name'])
             method = col['faker_method']
 
-            if hasattr(fake, method):
+            # --- INTERCEPTION LOGIC FOR "LAZY LLM" ---
+            # If the LLM uses a generic/nonsense method OR if the column name strongly implies a category,
+            # we FORCE the safety net instead of using Faker.
+
+            is_generic_method = method.lower() in ['word', 'words', 'sentence', 'text', 'lorem', 'string', 'random_element', 'random_letter']
+
+            # Keywords that strongly suggest this should be a categorical column (finite set)
+            categorical_keywords = ['status', 'type', 'category', 'class', 'tier', 'mode', 'segment', 'group', 'level', 'priority', 'region', 'department']
+            name_implies_category = any(k in col_name.lower() for k in categorical_keywords)
+
+            # If it's a generic method AND (it implies category OR it's just 'word'), we intercept.
+            # We are aggressive here: if it's 'word'/'sentence', we almost always want structured data unless it's 'notes'/'description'.
+            # If the column is 'description' or 'notes' or 'comment', we allow 'sentence'/'text'.
+            is_free_text_field = any(k in col_name.lower() for k in ['note', 'comment', 'description', 'message', 'feedback', 'review'])
+
+            should_intercept = (is_generic_method and not is_free_text_field) or (name_implies_category and is_generic_method)
+
+            if hasattr(fake, method) and not should_intercept:
                 data[col_name] = [getattr(fake, method)() for _ in range(rows)]
             else:
                 # Fallback: Try to find a relevant Faker method based on keywords
