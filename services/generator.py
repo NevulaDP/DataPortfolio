@@ -150,10 +150,12 @@ class ProjectGenerator:
         1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
         2. **Categorical Columns (Priority):** Identify ALL columns that represent categories, statuses, types, priorities, labels, platforms, or regions.
-           - **RULE:** If a column represents a concept with a finite set of possibilities (e.g., "Platform", "Region", "Tier", "Category", "Status", "Department"), it **MUST** be a `categorical_column` with a defined list of options.
-           - **STRICT FORBIDDEN:** You must NOT use `faker_columns` for these types of fields. Faker generates random nonsense (e.g. random words) for concepts like 'Department' or 'Region'.
+           - **RULE:** If a column represents a concept with a finite set of possibilities (e.g., "Platform", "Region", "Tier", "Category", "Status", "Department", "Role", "Class"), it **MUST** be a `categorical_column` with a defined list of options.
+           - **STRICT FORBIDDEN:** You must NOT use `faker_columns` for these types of fields.
            - Explicitly list the valid options for each categorical column.
-        3. **Date Columns:** Define date columns. **Crucially**, if dates must follow a logic (e.g. 'shipped_at' must be after 'created_at'), define this dependency.
+        3. **Faker Columns (Restricted):** ONLY use `faker_columns` for these specific high-cardinality identity types: `name`, `email`, `address`, `phone_number`, `uuid4`, `date_this_year`, `company`, `job`, `city`, `country`.
+           - **ANYTHING ELSE IS FORBIDDEN** in `faker_columns` and must be moved to `categorical_columns`.
+        4. **Date Columns:** Define date columns. **Crucially**, if dates must follow a logic (e.g. 'shipped_at' must be after 'created_at'), define this dependency.
            - Use 'base' type for independent dates.
            - Use 'dependent' type for dates that follow another date, with an offset in days.
         4. **Correlated/Numeric Columns:** Columns that depend on the Anchor Entity (e.g. Price depends on Product).
@@ -241,7 +243,8 @@ class ProjectGenerator:
         - You MUST keep the same Scenario (Title, Company, Problem).
         - You MUST fix the specific schema/type mismatches mentioned above.
         - Ensure 'date_columns' logic prevents date paradoxes.
-        - **STRICT RULE:** Ensure 'categorical_columns' are used for ALL finite sets (Status, Type, Region, Department, Platform, Tier). **DO NOT** use `faker_columns` for these. `faker_columns` are ONLY for high-cardinality unique IDs (Name, Email, UUID).
+        - **STRICT RULE:** Ensure 'categorical_columns' are used for ALL finite sets (Status, Type, Region, Department, Platform, Tier). **DO NOT** use `faker_columns` for these.
+        - **STRICT RULE:** `faker_columns` are ONLY for: `name`, `email`, `address`, `phone_number`, `uuid4`, `date_this_year`, `company`, `job`, `city`, `country`.
 
         **Project Scenario (DO NOT CHANGE):**
         **Title:** {narrative.get('title')}
@@ -511,7 +514,11 @@ class ProjectGenerator:
                 if fallback_method and hasattr(fake, fallback_method):
                     data[col_name] = [getattr(fake, fallback_method)() for _ in range(rows)]
                 else:
-                    data[col_name] = [fake.word() for _ in range(rows)]
+                    # SAFETY NET: If valid Faker method not found, assume it's a misclassified Categorical
+                    # Generate a finite set of placeholder options based on column name
+                    clean_title = col['name'].replace('_', ' ').title()
+                    placeholder_opts = [f"{clean_title} {char}" for char in ['A', 'B', 'C', 'D', 'E']]
+                    data[col_name] = np.random.choice(placeholder_opts, size=rows)
 
         df = pd.DataFrame(data)
 
