@@ -810,16 +810,9 @@ def render_workspace():
     with col_work:
         st.title("Workspace")
 
-        # Display Verification Alert if there are issues
-        ver_res = st.session_state.get('verification_result')
-        if ver_res and not ver_res.get('valid', True):
-            st.error(f"⚠️ Data Issues Detected (Score: {ver_res.get('score', 0)})")
-            for issue in ver_res.get('issues', []):
-                st.markdown(f"- {issue}")
-        elif ver_res and ver_res.get('valid', True) and ver_res.get('issues'):
-             with st.expander(f"✅ Data Verified (Score: {ver_res.get('score', 100)}) - Click to see notes"):
-                for issue in ver_res.get('issues', []):
-                    st.markdown(f"- {issue}")
+        # Verification Alert has been hidden as per user request (logic still runs internally)
+        # ver_res = st.session_state.get('verification_result')
+        # ... (Hidden)
 
         if df is not None:
             # Data Preview

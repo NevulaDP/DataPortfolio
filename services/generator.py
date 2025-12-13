@@ -139,9 +139,10 @@ class ProjectGenerator:
         **Requirements:**
         1. **Anchor Entity:** Pick the most relevant main entity (e.g., 'Product', 'User', 'Transaction', 'Ad Campaign').
            - Provide 5-10 REALISTIC, specific options for this entity (e.g., "Sony WH-1000XM5" not "Headphones").
-        2. **Categorical Columns:** Identify columns with a limited set of valid values (e.g. 'Status', 'Region', 'Department', 'Payment Method').
-           - Explicitly list the allowed options and their probabilities (weights).
-           - This is critical to avoid nonsense data.
+        2. **Categorical Columns (Priority):** Identify ALL columns that represent categories, statuses, types, priorities, or labels.
+           - You MUST explicitly list the valid options for these columns (e.g. `["Low", "Medium", "High"]` for Priority).
+           - **DO NOT** use `faker_columns` for these fields (e.g. 'Department', 'Region', 'Payment Method'), as Faker often generates random nonsense for them. Use this section instead.
+           - Ensure the options are realistic for the industry.
         3. **Date Columns:** Define date columns. **Crucially**, if dates must follow a logic (e.g. 'shipped_at' must be after 'created_at'), define this dependency.
            - Use 'base' type for independent dates.
            - Use 'dependent' type for dates that follow another date, with an offset in days.
@@ -168,6 +169,11 @@ class ProjectGenerator:
                         "name": "status",
                         "options": ["Pending", "Shipped", "Delivered"],
                         "weights": [0.1, 0.3, 0.6]
+                    }},
+                    {{
+                        "name": "department",
+                        "options": ["Sales", "Engineering", "HR"],
+                        "weights": [0.5, 0.3, 0.2]
                     }}
                 ],
                 "date_columns": [
@@ -195,7 +201,8 @@ class ProjectGenerator:
                 ],
                 "faker_columns": [
                     {{"name": "customer_name", "faker_method": "name"}},
-                    {{"name": "email", "faker_method": "email"}}
+                    {{"name": "email", "faker_method": "email"}},
+                    {{"name": "address", "faker_method": "address"}}
                 ]
             }},
             "display_schema": [
@@ -224,7 +231,7 @@ class ProjectGenerator:
         - You MUST keep the same Scenario (Title, Company, Problem).
         - You MUST fix the specific schema/type mismatches mentioned above.
         - Ensure 'date_columns' logic prevents date paradoxes.
-        - Ensure 'categorical_columns' are used for finite sets.
+        - Ensure 'categorical_columns' are used for ALL finite sets (Status, Type, Region, Department) to avoid random Faker data.
 
         **Project Scenario (DO NOT CHANGE):**
         **Title:** {narrative.get('title')}
