@@ -127,7 +127,7 @@ class ProjectGenerator:
             "title": "Creative Project Title",
             "company_name": "Name",
             "business_problem": "Short description of the core problem",
-            "description": "Detailed backstory split into two paragraphs. Use \\n\\n to separate them.",
+            "description": "Two concise paragraphs (approx. 2-3 sentences each). Use \\n\\n to separate them. Do not exceed 80 words total.",
             "dataset_granularity": "Each row represents..."
         }}
         """
