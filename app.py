@@ -774,7 +774,7 @@ def render_workspace():
                 st.write(f"{i+1}. {task}")
 
         with st.expander("Data Schema"):
-            schema = definition.get('display_schema', definition.get('schema', []))
+            schema = definition.get('display_schema', definition.get('schema', definition.get('schema_list', [])))
             if schema:
                 # Prepare data for display
                 schema_data = []
