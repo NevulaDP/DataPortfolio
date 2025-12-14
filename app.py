@@ -10,6 +10,7 @@ import seaborn as sns
 import uuid
 import ast
 import duckdb
+import time
 from code_editor import code_editor
 from streamlit_quill import st_quill
 from streamlit_float import *
@@ -751,8 +752,27 @@ def render_notebook():
 
 def render_sidebar():
     with st.sidebar:
+        # Logo Logic
         if os.path.exists("logo.png"):
             st.image("logo.png", width=100)
+
+        with st.expander("Customize Brand"):
+            uploaded_logo = st.file_uploader("Upload Logo", type=['png', 'jpg', 'jpeg'], key="logo_uploader")
+            if uploaded_logo:
+                # Save to disk to persist across reruns/sessions
+                # Only write if content is different to prevent loop or redundant writes
+                new_bytes = uploaded_logo.getvalue()
+                current_bytes = None
+                if os.path.exists("logo.png"):
+                    with open("logo.png", "rb") as f:
+                        current_bytes = f.read()
+
+                if new_bytes != current_bytes:
+                    with open("logo.png", "wb") as f:
+                        f.write(new_bytes)
+                    st.toast("Logo updated!", icon="✅")
+                    time.sleep(1)
+                    st.rerun()
 
         st.title("Settings")
         val = st.text_input(
