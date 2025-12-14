@@ -16,9 +16,20 @@ def serialize_session(session_state):
         if "data" in project_safe:
             del project_safe["data"]
 
+    # Sanitize notebook cells to remove non-serializable 'result' objects
+    raw_cells = session_state.get("notebook_cells", [])
+    safe_cells = []
+    for cell in raw_cells:
+        cell_copy = cell.copy()
+        # 'result' often contains DataFrames, Figures, etc.
+        # We strip it for serialization. On load, users will need to run cells to see results.
+        if "result" in cell_copy:
+            cell_copy["result"] = None
+        safe_cells.append(cell_copy)
+
     data = {
         "project": project_safe,
-        "notebook_cells": session_state.get("notebook_cells", []),
+        "notebook_cells": safe_cells,
         "messages": session_state.get("messages", []),
         "generated_history": session_state.get("generated_history", []),
     }
