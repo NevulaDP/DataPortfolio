@@ -384,7 +384,7 @@ class ProjectGenerator:
                     min_off = col.get('offset_days_min', 0)
                     max_off = col.get('offset_days_max', 30)
                     offsets = np.random.randint(min_off, max_off + 1, size=rows)
-                    base_series = pd.to_datetime(data[dependency])
+                    base_series = pd.to_datetime(pd.Series(data[dependency]))
                     data[col_name] = (base_series + pd.to_timedelta(offsets, unit='D')).dt.date
                     processed_dates.add(col_name)
                 else:
@@ -553,7 +553,7 @@ class ProjectGenerator:
                     min_off = col.get('offset_days_min', 0)
                     max_off = col.get('offset_days_max', 30)
                     offsets = np.random.randint(min_off, max_off + 1, size=rows)
-                    base_series = pd.to_datetime(data[dep_name])
+                    base_series = pd.to_datetime(pd.Series(data[dep_name]))
                     data[col_name] = (base_series + pd.to_timedelta(offsets, unit='D')).dt.date
                 else:
                     # Fallback if dependency missing
