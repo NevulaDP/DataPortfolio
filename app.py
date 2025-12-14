@@ -63,20 +63,6 @@ st.markdown("""
         padding-top: 2rem;
         padding-bottom: 2rem;
     }
-    .scenario-box {
-        background-color: #1e1e1e;
-        color: #e0e0e0;
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #4CAF50;
-        margin-bottom: 20px;
-    }
-    .scenario-title {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #4CAF50;
-        margin-bottom: 10px;
-    }
     .stButton button {
         border-radius: 5px;
     }
@@ -777,14 +763,11 @@ def render_workspace():
 
     # --- Context (Left Column) ---
     with col_context:
-        st.markdown(f"""
-        <div class="scenario-box">
-            <div class="scenario-title">{definition['title']}</div>
-            <p>{definition['description']}</p>
-            <hr style="border-color: #555;">
-            <p style="font-size: 0.9rem; color: #aaa;"><strong>Dataset Granularity:</strong> {definition.get('dataset_granularity', 'Not specified')}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader(definition['title'])
+        st.markdown(f"<div style='text-align: justify; white-space: pre-wrap;'>{definition['description']}</div>", unsafe_allow_html=True)
+
+        st.divider()
+        st.caption(f"**Dataset Granularity:** {definition.get('dataset_granularity', 'Not specified')}")
 
         with st.expander("Tasks", expanded=True):
             for i, task in enumerate(definition['tasks']):
