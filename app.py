@@ -18,6 +18,7 @@ from services.llm import LLMService
 from services.security import SafeExecutor, SecurityError
 from services.report_generator import generate_html_report
 from services.verifier import VerifierService
+from services.session_manager import serialize_session, deserialize_session
 
 # --- Page Config ---
 st.set_page_config(
@@ -121,6 +122,30 @@ components.html("""
 """, height=0, width=0)
 
 # --- Functions ---
+
+def load_session_callback():
+    uploaded_file = st.session_state.get('session_uploader')
+    if uploaded_file is not None:
+        try:
+            # Read string content
+            content = uploaded_file.getvalue().decode("utf-8")
+            new_state = deserialize_session(content)
+
+            if new_state:
+                st.session_state.project = new_state['project']
+                st.session_state.notebook_cells = new_state['notebook_cells']
+                st.session_state.messages = new_state['messages']
+                st.session_state.generated_history = new_state['generated_history']
+                st.session_state.project_data = new_state['project_data']
+
+                # Re-init notebook scope
+                init_notebook_state()
+
+                st.toast("Session loaded successfully!", icon="✅")
+            else:
+                st.error("Failed to parse session file.")
+        except Exception as e:
+            st.error(f"Error loading session: {e}")
 
 def init_notebook_state():
     # Initialize scope with common libraries and data
@@ -740,6 +765,33 @@ def render_sidebar():
             st.warning("No API Key set. Using Mock Mode.")
 
         st.divider()
+
+        # Load Session (Always available)
+        st.subheader("Load Session")
+        st.file_uploader(
+            "Upload session file (.json)",
+            type=["json"],
+            key="session_uploader",
+            on_change=load_session_callback,
+            label_visibility="collapsed"
+        )
+
+        # Save Session (Only in Workspace)
+        if st.session_state.project is not None:
+            st.divider()
+            st.subheader("Save Session")
+            try:
+                # Serialize current state
+                json_str = serialize_session(st.session_state)
+                st.download_button(
+                    "💾 Download Session",
+                    data=json_str,
+                    file_name="analysis_session.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Error preparing save: {e}")
 
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
