@@ -751,6 +751,9 @@ def render_notebook():
 
 def render_sidebar():
     with st.sidebar:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=100)
+
         st.title("Settings")
         val = st.text_input(
             "Gemini API Key",
