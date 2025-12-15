@@ -753,7 +753,10 @@ def render_sidebar():
     with st.sidebar:
         # Display Logo if present
         if os.path.exists("logo.png"):
-            st.sidebar.image("logo.png", width=100)
+            # Center the logo using columns
+            _, col_logo, _ = st.columns([1, 1, 1])
+            with col_logo:
+                st.image("logo.png", width=100)
 
         st.title("Settings")
         val = st.text_input(
