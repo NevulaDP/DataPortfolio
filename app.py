@@ -300,12 +300,13 @@ def generate_project():
         st.error("Please enter a sector.")
         return
 
-    with st.spinner(f"Generating synthetic data and scenario for '{st.session_state.sector_input}'..."):
+    with st.status("Building your project...", expanded=True) as status:
         try:
             # Pass history to prevent repetition
             history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
             # Step 1: Generate Narrative (Fixed)
+            st.write("Drafting Scenario Narrative...")
             narrative = project_generator._generate_scenario_narrative(
                 st.session_state.sector_input,
                 st.session_state.api_key,
@@ -326,10 +327,12 @@ def generate_project():
             while current_try < max_retries:
                 if current_try == 0:
                     # Initial Recipe Generation
+                    st.write("Designing Data Recipe...")
                     definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
                 else:
                     # Refinement based on feedback
-                    st.toast(f"Refining data recipe (Attempt {current_try+1})...", icon="🔄")
+                    st.write(f"Refining data recipe (Attempt {current_try+1})...")
+                    status.update(label=f"Refining data (Attempt {current_try+1})...")
                     definition = project_generator.refine_data_recipe(
                         narrative,
                         verification['issues'],
@@ -345,15 +348,18 @@ def generate_project():
                     # Inject granularity manually if missing from LLM output but present in narrative
                     if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
                         definition['dataset_granularity'] = narrative['dataset_granularity']
+                    st.write("Generating Synthetic Data...")
                     df = project_generator.generate_dataset(definition, rows=10000)
                 elif 'recipe' in definition:
                     # Legacy fallback
+                    st.write("Generating Synthetic Data...")
                     df = project_generator.generate_dataset(definition['recipe'], rows=10000)
                 else:
                     st.error("Invalid recipe format received from AI.")
                     return
 
                 # Verify
+                st.write("Verifying Data Quality...")
                 verification = verifier_service.verify_dataset_schema(
                     definition,
                     df,
@@ -365,6 +371,8 @@ def generate_project():
                     break # Success!
 
                 current_try += 1
+
+            status.update(label="Project Ready!", state="complete", expanded=False)
 
             # Store Final Results (even if invalid after max retries)
             st.session_state.verification_result = verification
