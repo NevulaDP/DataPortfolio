@@ -756,7 +756,7 @@ def render_sidebar():
             # Center the logo using columns
             _, col_logo, _ = st.columns([1, 1, 1])
             with col_logo:
-                st.image("logo.png", width=100)
+                st.image("logo.png", width=150)
 
         st.title("Settings")
         val = st.text_input(
