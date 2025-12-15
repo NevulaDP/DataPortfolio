@@ -23,6 +23,7 @@ from services.session_manager import serialize_session, deserialize_session
 # --- Page Config ---
 st.set_page_config(
     page_title="Junior Data Analyst Portfolio Builder",
+    page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -751,6 +752,13 @@ def render_notebook():
 
 def render_sidebar():
     with st.sidebar:
+        # Display Logo if present
+        if os.path.exists("logo.png"):
+            # Center the logo using columns
+            _, col_logo, _ = st.columns([1, 1, 1])
+            with col_logo:
+                st.image("logo.png", width=150)
+
         st.title("Settings")
         val = st.text_input(
             "Gemini API Key",
