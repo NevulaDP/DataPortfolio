@@ -339,7 +339,7 @@ def execute_cell(cell_idx):
             # Get Python Scope
             exec_scope = get_execution_scope()
 
-            # Register all DataFrames found in the scope
+            # Register all DataFrames and Series found in the scope
             for var_name, var_val in exec_scope.items():
                 if isinstance(var_val, pd.DataFrame):
                     try:
@@ -347,6 +347,12 @@ def execute_cell(cell_idx):
                         # Also register 'data' if it's the main df
                         if var_name == 'df':
                             con.register('data', var_val)
+                    except Exception:
+                        pass # Ignore registration errors
+                elif isinstance(var_val, pd.Series):
+                    try:
+                        # DuckDB requires DataFrame for registration
+                        con.register(var_name, var_val.to_frame())
                     except Exception:
                         pass # Ignore registration errors
 
