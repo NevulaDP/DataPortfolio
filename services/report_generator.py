@@ -3,9 +3,9 @@ import pandas as pd
 import io
 import base64
 import html
-# import matplotlib.pyplot as plt # Removed
-# from matplotlib.figure import Figure # Removed
-# from matplotlib.axes import Axes # Removed
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
 def generate_html_report(project_title, project_description, cells):
     """
@@ -182,7 +182,6 @@ def generate_html_report(project_title, project_description, cells):
         content = cell['content']
         result = cell.get('result')
         output = cell.get('output')
-        images = cell.get('images', [])
 
         # Wrapper only for spacing, no visual box
         html_content.append(f'<div class="content-block" id="cell-{i}">')
@@ -198,7 +197,7 @@ def generate_html_report(project_title, project_description, cells):
 
         # 2. Cell Output/Result
         if cell_type != 'markdown':
-            if output or result is not None or images:
+            if output or result is not None:
                 html_content.append('<div class="output-block">')
 
                 # Text Output (stdout/stderr)
@@ -220,31 +219,30 @@ def generate_html_report(project_title, project_description, cells):
                         else:
                             html_content.append(result.to_html(classes='dataframe', index=False, border=0))
 
-                    # If it's a string (e.g. from SQL json or simple string)
-                    elif isinstance(result, str):
-                        try:
-                            # Try to see if it looks like a list of dicts (JSON)
-                            import json
-                            possible_json = json.loads(result)
-                            if isinstance(possible_json, list):
-                                df = pd.DataFrame(possible_json)
-                                html_content.append(df.head(100).to_html(classes='dataframe', index=False, border=0))
-                            else:
-                                html_content.append(f'<pre>{html.escape(result)}</pre>')
-                        except:
-                            html_content.append(f'<pre>{html.escape(result)}</pre>')
+                    # Matplotlib/Seaborn Figure or Axes
+                    elif isinstance(result, (Figure, Axes)):
+                        # If it's an Axes, get the figure
+                        fig_to_plot = result
+                        if isinstance(result, Axes):
+                            fig_to_plot = result.figure
 
-                    # Other objects
+                        # Save plot to PNG in memory
+                        buf = io.BytesIO()
+                        try:
+                            fig_to_plot.savefig(buf, format='png', bbox_inches='tight')
+                            buf.seek(0)
+                            img_str = base64.b64encode(buf.read()).decode('utf-8')
+                            html_content.append(f'<img src="data:image/png;base64,{img_str}" />')
+                        except Exception as e:
+                            html_content.append(f'<div class="error">Error rendering plot: {e}</div>')
+                        finally:
+                            buf.close()
+
+                    # DuckDB/Pandas Series/Other objects
                     else:
                         # Fallback to string representation
                         escaped_result = html.escape(str(result))
                         html_content.append(f'<pre>{escaped_result}</pre>')
-
-                # Images (Base64 from Pyodide)
-                if images:
-                    for img_b64 in images:
-                         html_content.append(f'<img src="data:image/png;base64,{img_b64}" />')
-
 
                 html_content.append('</div>') # End output-block
 
