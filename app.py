@@ -53,6 +53,8 @@ if 'generated_history' not in st.session_state:
     st.session_state.generated_history = []
 if 'verification_result' not in st.session_state:
     st.session_state.verification_result = None
+if 'generation_phase' not in st.session_state:
+    st.session_state.generation_phase = 'idle' # idle, generating, complete
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -317,11 +319,7 @@ def delete_cell(index):
             del st.session_state.cell_edit_state[cell_id]
         st.rerun()
 
-def generate_project():
-    if not st.session_state.sector_input:
-        st.error("Please enter a sector.")
-        return
-
+def render_loading_screen():
     # Status Placeholder (Pulse Animation)
     status_placeholder = st.empty()
 
@@ -340,6 +338,8 @@ def generate_project():
         if "error" in narrative:
             status_placeholder.empty()
             st.error(narrative["error"])
+            st.session_state.generation_phase = 'idle'
+            st.rerun() # Force rerun to show landing page again
             return
 
         # Step 2: Generate Recipe & Data (Loop for correction)
@@ -366,6 +366,8 @@ def generate_project():
             if "error" in definition:
                 status_placeholder.empty()
                 st.error(definition["error"])
+                st.session_state.generation_phase = 'idle'
+                st.rerun()
                 return
 
             # Handle new "Schema-First" format (schema_list at root) vs Legacy (recipe key)
@@ -382,6 +384,8 @@ def generate_project():
             else:
                 status_placeholder.empty()
                 st.error("Invalid recipe format received from AI.")
+                st.session_state.generation_phase = 'idle'
+                st.rerun()
                 return
 
             # Verify
@@ -421,10 +425,17 @@ def generate_project():
             "role": "assistant",
             "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
         }]
+
+        # Set phase to complete to trigger workspace render on next run
+        st.session_state.generation_phase = 'complete'
+        st.rerun()
+
     except Exception as e:
         status_placeholder.empty()
         st.error(f"Error generating project: {e}")
         traceback.print_exc()
+        st.session_state.generation_phase = 'idle'
+        st.rerun()
 
 def toggle_edit_mode(cell_id):
     current_state = st.session_state.cell_edit_state.get(cell_id, True)
@@ -837,6 +848,12 @@ def render_sidebar():
             except Exception as e:
                 st.error(f"Error preparing save: {e}")
 
+def start_generation_callback():
+    if st.session_state.sector_input:
+        st.session_state.generation_phase = 'generating'
+    else:
+        st.error("Please enter a sector.")
+
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
     st.markdown("""
@@ -848,7 +865,7 @@ def render_landing():
     """)
 
     st.text_input("Enter a Sector (e.g., Retail, Healthcare, Finance)", key="sector_input")
-    st.button("Start Project", on_click=generate_project, type="primary")
+    st.button("Start Project", on_click=start_generation_callback, type="primary")
 
 def render_workspace():
     project = st.session_state.project
@@ -940,7 +957,9 @@ def render_workspace():
 
 render_sidebar()
 
-if st.session_state.project is None:
+if st.session_state.generation_phase == 'generating':
+    render_loading_screen()
+elif st.session_state.project is None:
     render_landing()
 else:
     render_workspace()
