@@ -903,7 +903,7 @@ def start_generation_callback():
     if st.session_state.sector_input:
         st.session_state.generation_phase = 'generating'
     else:
-        st.error("Please enter a sector.")
+        st.session_state['generation_error'] = "Please enter a sector."
 
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
@@ -1012,9 +1012,13 @@ def render_workspace():
 
 render_sidebar()
 
-if st.session_state.generation_phase == 'generating':
-    render_loading_screen()
-elif st.session_state.project is None:
-    render_landing()
-else:
-    render_workspace()
+# Create a main placeholder to manage page transitions and ensure old content is cleared
+main_placeholder = st.empty()
+
+with main_placeholder.container():
+    if st.session_state.generation_phase == 'generating':
+        render_loading_screen()
+    elif st.session_state.project is None:
+        render_landing()
+    else:
+        render_workspace()
