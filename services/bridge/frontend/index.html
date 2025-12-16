@@ -11,7 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; }
+        body { margin: 0; padding: 0; overflow: hidden; display: none; }
     </style>
 </head>
 <body>
@@ -30,6 +30,18 @@
                 }, "*");
             }
         }
+
+        const Streamlit = {
+            setFrameHeight: (height) => {
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        isStreamlitMessage: true,
+                        type: "streamlit:setFrameHeight",
+                        height: height
+                    }, "*");
+                }
+            }
+        };
 
         // --- State ---
         let pyodide = null;
@@ -93,6 +105,8 @@
                 sendMessageToStreamlit({ type: "status", message: "ready" });
                 // Notify ready to receive
                 window.parent.postMessage({type: "streamlit:componentReady"}, "*");
+                // Hide frame
+                Streamlit.setFrameHeight(0);
             }
         }
 
@@ -222,10 +236,10 @@
             // 1. Data Loading
             if (cmd === "load_data" && data) {
                 if (data !== currentDataHash) {
-                    document.getElementById("status").innerText = "Loading Data...";
+                    // document.getElementById("status").innerText = "Loading Data...";
                     await loadData(data);
                     currentDataHash = data;
-                    document.getElementById("status").innerText = "Ready: Python & SQL";
+                    // document.getElementById("status").innerText = "Ready: Python & SQL";
                     sendMessageToStreamlit({ id: id, status: "data_loaded" });
                 }
             }
@@ -233,7 +247,7 @@
             // 2. Execution
             if (cmd === "execute" && id !== lastExecutionId) {
                 lastExecutionId = id;
-                document.getElementById("status").innerText = "Running...";
+                // document.getElementById("status").innerText = "Running...";
 
                 let res = {};
                 if (args.cell_type === "sql") {
@@ -242,7 +256,7 @@
                     res = await executePython(code);
                 }
 
-                document.getElementById("status").innerText = "Ready: Python & SQL";
+                // document.getElementById("status").innerText = "Ready: Python & SQL";
 
                 sendMessageToStreamlit({
                     id: id,
