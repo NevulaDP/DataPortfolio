@@ -85,7 +85,7 @@ st.markdown("""
     .loader {
         width: 80px;
         height: 80px;
-        border: 8px solid var(--secondary-background-color);
+        border: 8px solid rgba(150, 150, 150, 0.2);
         border-left-color: #FF4B4B; /* Streamlit Red */
         border-radius: 50%;
         animation: spin 1.2s linear infinite;
@@ -339,16 +339,13 @@ def delete_cell(index):
             del st.session_state.cell_edit_state[cell_id]
         st.rerun()
 
-def render_loading_screen():
-    # Status Placeholder (Pulse Animation)
-    status_placeholder = st.empty()
-
+def render_loading_screen(placeholder):
     try:
         # Pass history to prevent repetition
         history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
         # Step 1: Generate Narrative (Fixed)
-        status_placeholder.markdown('''
+        placeholder.markdown('''
             <div class="loading-container">
                 <div class="loader"></div>
                 <div class="loading-text">Drafting Scenario Narrative...</div>
@@ -362,7 +359,7 @@ def render_loading_screen():
         )
 
         if "error" in narrative:
-            status_placeholder.empty()
+            placeholder.empty()
             st.session_state['generation_error'] = narrative["error"]
             st.session_state.generation_phase = 'idle'
             st.rerun()
@@ -378,7 +375,7 @@ def render_loading_screen():
         while current_try < max_retries:
             if current_try == 0:
                 # Initial Recipe Generation
-                status_placeholder.markdown('''
+                placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader"></div>
                         <div class="loading-text">Designing Data Recipe...</div>
@@ -387,7 +384,7 @@ def render_loading_screen():
                 definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
             else:
                 # Refinement based on feedback
-                status_placeholder.markdown(f'''
+                placeholder.markdown(f'''
                     <div class="loading-container">
                         <div class="loader"></div>
                         <div class="loading-text">Refining data (Attempt {current_try+1})...</div>
@@ -400,7 +397,7 @@ def render_loading_screen():
                 )
 
             if "error" in definition:
-                status_placeholder.empty()
+                placeholder.empty()
                 st.session_state['generation_error'] = definition["error"]
                 st.session_state.generation_phase = 'idle'
                 st.rerun()
@@ -411,7 +408,7 @@ def render_loading_screen():
                 # Inject granularity manually if missing from LLM output but present in narrative
                 if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
                     definition['dataset_granularity'] = narrative['dataset_granularity']
-                status_placeholder.markdown('''
+                placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader"></div>
                         <div class="loading-text">Generating Synthetic Data...</div>
@@ -420,7 +417,7 @@ def render_loading_screen():
                 df = project_generator.generate_dataset(definition, rows=10000)
             elif 'recipe' in definition:
                 # Legacy fallback
-                status_placeholder.markdown('''
+                placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader"></div>
                         <div class="loading-text">Generating Synthetic Data...</div>
@@ -428,14 +425,14 @@ def render_loading_screen():
                 ''', unsafe_allow_html=True)
                 df = project_generator.generate_dataset(definition['recipe'], rows=10000)
             else:
-                status_placeholder.empty()
+                placeholder.empty()
                 st.session_state['generation_error'] = "Invalid recipe format received from AI."
                 st.session_state.generation_phase = 'idle'
                 st.rerun()
                 return
 
             # Verify
-            status_placeholder.markdown('''
+            placeholder.markdown('''
                 <div class="loading-container">
                     <div class="loader"></div>
                     <div class="loading-text">Verifying Data Quality...</div>
@@ -454,7 +451,7 @@ def render_loading_screen():
             current_try += 1
 
         # Clear Pulse
-        status_placeholder.empty()
+        placeholder.empty()
 
         # Store Final Results (even if invalid after max retries)
         st.session_state.verification_result = verification
@@ -482,7 +479,7 @@ def render_loading_screen():
         st.rerun()
 
     except Exception as e:
-        status_placeholder.empty()
+        placeholder.empty()
         st.session_state['generation_error'] = f"Error generating project: {e}"
         traceback.print_exc()
         st.session_state.generation_phase = 'idle'
@@ -903,7 +900,7 @@ def start_generation_callback():
     if st.session_state.sector_input:
         st.session_state.generation_phase = 'generating'
     else:
-        st.error("Please enter a sector.")
+        st.session_state['generation_error'] = "Please enter a sector."
 
 def render_landing():
     st.title("Junior Data Analyst Portfolio Builder 🚀")
@@ -1012,9 +1009,14 @@ def render_workspace():
 
 render_sidebar()
 
+# Create a main placeholder to manage page transitions and ensure old content is cleared
+main_placeholder = st.empty()
+
 if st.session_state.generation_phase == 'generating':
-    render_loading_screen()
+    render_loading_screen(main_placeholder)
 elif st.session_state.project is None:
-    render_landing()
+    with main_placeholder.container():
+        render_landing()
 else:
-    render_workspace()
+    with main_placeholder.container():
+        render_workspace()
