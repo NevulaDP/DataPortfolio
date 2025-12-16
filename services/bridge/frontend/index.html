@@ -5,104 +5,137 @@
     <title>Pyodide Bridge</title>
     <!-- Pyodide -->
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
-    <!-- DuckDB WASM (We'll load it dynamically or use the Pyodide one if sufficient, but dedicated is better.
-         For simplicity and compatibility with the Pyodide environment, we might try using duckdb via pyodide's micropip first,
-         as it integrates with the virtual filesystem easier.) -->
+
+    <!-- DuckDB WASM -->
+    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; }
+    </style>
 </head>
 <body>
-    <div id="status" style="font-family: monospace; font-size: 12px; color: #666;">Initializing Environment...</div>
+    <div id="status" style="font-family: monospace; font-size: 12px; color: #666;">Initializing...</div>
 
-    <script>
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+
         // --- Streamlit Component Boilerplate ---
         function sendMessageToStreamlit(data) {
-            Streamlit.setComponentValue(data);
-        }
-
-        const Streamlit = {
-            setComponentValue: (value) => {
+            if (window.parent !== window) {
                 window.parent.postMessage({
                     isStreamlitMessage: true,
                     type: "streamlit:componentValue",
-                    value: value
+                    value: data
                 }, "*");
-            },
-            RENDER_EVENT: "streamlit:render"
-        };
+            }
+        }
 
         // --- State ---
         let pyodide = null;
-        let isReady = false;
+        let db = null;
+        let conn = null;
+        let isPyodideReady = false;
+        let isDuckDBReady = false;
         let lastExecutionId = null;
         let currentDataHash = null;
 
         // --- Initialization ---
-        async function main() {
+
+        // 1. Pyodide
+        async function initPyodideEnv() {
             try {
-                // Load Pyodide
                 pyodide = await loadPyodide();
+                await pyodide.loadPackage(["pandas", "numpy", "matplotlib"]); // Removed micropip/duckdb
 
-                // Load Packages
-                await pyodide.loadPackage(["pandas", "numpy", "matplotlib", "micropip"]);
-
-                // Install DuckDB via micropip (often cleaner for in-memory interaction with pandas)
-                // Note: DuckDB has a python wrapper for Pyodide.
+                // Init plotting code
                 await pyodide.runPythonAsync(`
-                    import micropip
-                    await micropip.install("duckdb")
                     import pandas as pd
                     import numpy as np
                     import matplotlib.pyplot as plt
-                    import duckdb
                     import io
                     import base64
                     import sys
-
-                    # Setup global connection
-                    con = duckdb.connect()
                 `);
 
-                isReady = true;
-                document.getElementById("status").innerText = "Ready: Python & SQL";
-                sendMessageToStreamlit({ type: "status", message: "ready" });
-
+                isPyodideReady = true;
+                checkReady();
             } catch (err) {
-                document.getElementById("status").innerText = "Error: " + err.message;
-                console.error(err);
-                sendMessageToStreamlit({ type: "error", message: err.message });
+                reportError("Pyodide Init Error: " + err.message);
             }
         }
 
-        main();
+        // 2. DuckDB WASM
+        async function initDuckDBEnv() {
+            try {
+                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                const worker_url = URL.createObjectURL(
+                    new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'text/javascript'})
+                );
+
+                const worker = new Worker(worker_url);
+                const logger = new duckdb.ConsoleLogger();
+                db = new duckdb.AsyncDuckDB(logger, worker);
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                conn = await db.connect();
+
+                isDuckDBReady = true;
+                checkReady();
+            } catch (err) {
+                reportError("DuckDB Init Error: " + err.message);
+            }
+        }
+
+        function checkReady() {
+            if (isPyodideReady && isDuckDBReady) {
+                document.getElementById("status").innerText = "Ready: Python & SQL";
+                sendMessageToStreamlit({ type: "status", message: "ready" });
+                // Notify ready to receive
+                window.parent.postMessage({type: "streamlit:componentReady"}, "*");
+            }
+        }
+
+        function reportError(msg) {
+            document.getElementById("status").innerText = msg;
+            console.error(msg);
+            sendMessageToStreamlit({ type: "error", message: msg });
+        }
+
+        // Start Init
+        initPyodideEnv();
+        initDuckDBEnv();
 
         // --- Logic ---
 
         async function loadData(csvString) {
-            if (!isReady) return;
+            if (!isPyodideReady || !isDuckDBReady) return;
             try {
-                // We write the CSV to the virtual filesystem so DuckDB and Pandas can read it easily
+                // 1. Load into Pyodide (Pandas)
                 pyodide.FS.writeFile("data.csv", csvString);
-
                 await pyodide.runPythonAsync(`
-                    # Load into Pandas
                     df = pd.read_csv("data.csv")
-
-                    # Register with DuckDB
-                    # We might need to unregister first if it exists, or just overwrite
-                    try:
-                        con.register('df', df)
-                        con.register('data', df)
-                    except:
-                        pass # Might already be registered
                 `);
-                console.log("Data loaded into Pyodide execution environment.");
+
+                // 2. Load into DuckDB
+                // Register the CSV file in DuckDB's virtual filesystem
+                await db.registerFileText('data.csv', csvString);
+
+                // Create table from CSV
+                // We use CREATE OR REPLACE to handle reloads
+                await conn.query(`CREATE OR REPLACE TABLE data AS SELECT * FROM read_csv_auto('data.csv')`);
+                // Alias 'df' as well
+                await conn.query(`CREATE OR REPLACE VIEW df AS SELECT * FROM data`);
+
+                console.log("Data loaded into both environments.");
             } catch (e) {
                 console.error("Data load error", e);
-                return { error: str(e) };
+                reportError("Data Load Error: " + e.message);
             }
         }
 
         async function executePython(code) {
-            if (!isReady) return { output: "Environment not ready." };
+            if (!isPyodideReady) return { output: "Python Environment not ready." };
 
             let output = "";
             let result = null;
@@ -111,30 +144,22 @@
             // Reset stdout capture
             pyodide.runPython(`
                 sys.stdout = io.StringIO()
-                plt.clf() # Clear previous plots
+                plt.clf()
             `);
 
             try {
-                // Run the code
-                // We use eval=False to execute statements.
-                // To get the last expression value like a notebook, we need to handle it manually or use runPython behaviour.
-                // pyodide.runPython returns the result of the last expression automatically.
-                await pyodide.runPythonAsync(code);
+                // Run code
+                let rawResult = await pyodide.runPythonAsync(code);
 
                 // Capture Stdout
                 output = pyodide.runPython("sys.stdout.getvalue()");
 
-                // Capture Result (String representation of the last variable is hard to get if we don't capture the return of runPython)
-                // Actually `await pyodide.runPythonAsync(code)` returns the result.
-                // Let's re-run it this way:
-                let rawResult = await pyodide.runPythonAsync(code);
+                // Capture Result
                 if (rawResult !== undefined && rawResult !== null) {
-                    // Convert to string safely
                     result = String(rawResult);
                 }
 
                 // Capture Plots
-                // We check if there are active figures
                 await pyodide.runPythonAsync(`
                     _imgs = []
                     if plt.get_fignums():
@@ -148,45 +173,35 @@
                         plt.close('all')
                     _imgs
                 `).then(imgs => {
-                    // Pyodide proxy object to JS array
                     if (imgs && imgs.toJs) {
                         images = imgs.toJs();
                     }
                 });
 
             } catch (e) {
-                // If it's a python error
-                output = e.message; // Python tracebacks usually come in the message or can be formatted
+                output = e.message;
             }
 
-            return {
-                output: output,
-                result: result,
-                images: images
-            };
+            return { output, result, images };
         }
 
         async function executeSQL(query) {
-             if (!isReady) return { output: "Environment not ready." };
+             if (!isDuckDBReady) return { output: "SQL Environment not ready." };
 
              try {
-                // Escape triple quotes in query just in case, though passing via variable is safer
-                // We'll set a variable in python then run it
-                pyodide.globals.set("_sql_query", query);
+                const arrowResult = await conn.query(query);
+                // Convert Arrow to JSON
+                const result = arrowResult.toArray().map(row => row.toJSON());
 
-                await pyodide.runPythonAsync(`
-                    _sql_res = con.execute(_sql_query).df()
-                    # Convert to HTML or CSV or JSON for display?
-                    # Let's return JSON-like list of dicts or just a string representation for now
-                    # For the UI, a CSV string might be best to render a table, or just a truncated string.
-                    # The user wants "result" in the notebook.
-                    _sql_out = _sql_res.head(50).to_json(orient='records')
-                `);
+                // Return top 50 rows only to keep it light?
+                // The result is already fully fetched in memory here.
+                // We'll return the full object, Streamlit can handle reasonable sizes (100 rows preview).
+                // Actually the bridge should probably truncate to avoid huge payload.
+                const truncated = result.slice(0, 100);
 
-                let jsonRes = pyodide.globals.get("_sql_out");
                 return {
                     output: "",
-                    result: JSON.parse(jsonRes), // Return actual data object
+                    result: truncated,
                     type: "dataframe"
                 };
 
@@ -202,21 +217,15 @@
             const args = event.data.args;
             if (!args) return;
 
-            // args.data, args.code, args.cmd, args.id
-            // The python component will pass these in the `args` object (or just direct keys if using declare_component appropriately)
-            // Actually, Streamlit passes `args` as the dictionary of arguments from Python.
-
             const { cmd, data, code, id } = args;
 
-            // 1. Data Loading (only if changed)
+            // 1. Data Loading
             if (cmd === "load_data" && data) {
-                if (data !== currentDataHash) { // Simple check, or rely on python to only send when needed
+                if (data !== currentDataHash) {
                     document.getElementById("status").innerText = "Loading Data...";
                     await loadData(data);
-                    currentDataHash = data; // In reality 'data' is the csv string. We might want a hash passed separately to avoid comparing huge strings.
-                    // But for now, we'll assume Python controls when to send 'load_data'.
-                    document.getElementById("status").innerText = "Ready";
-                    // Ack
+                    currentDataHash = data;
+                    document.getElementById("status").innerText = "Ready: Python & SQL";
                     sendMessageToStreamlit({ id: id, status: "data_loaded" });
                 }
             }
@@ -233,7 +242,7 @@
                     res = await executePython(code);
                 }
 
-                document.getElementById("status").innerText = "Ready";
+                document.getElementById("status").innerText = "Ready: Python & SQL";
 
                 sendMessageToStreamlit({
                     id: id,
@@ -244,11 +253,6 @@
                 });
             }
         });
-
-        // Notify ready to receive
-        window.parent.postMessage({type: "streamlit:componentReady"}, "*");
-        // Set frame height to 0 usually, or small status bar
-        Streamlit.setFrameHeight(30);
 
     </script>
 </body>
