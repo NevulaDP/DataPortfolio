@@ -193,13 +193,9 @@ def load_session_callback():
             st.error(f"Error loading session: {e}")
 
 def init_notebook_state():
-    # Initialize scope with common libraries and data
+    # Initialize scope with user data only (modules are injected at execution time)
+    # We only store variables that need persistence (like df, user vars)
     st.session_state.notebook_scope = {
-        'pd': pd,
-        'np': np,
-        'plt': plt,
-        'sns': sns,
-        'st': st,
         'df': st.session_state.get('project_data')
     }
 
@@ -230,6 +226,48 @@ def init_notebook_state():
             if cell['type'] == 'markdown':
                 st.session_state.cell_edit_state[cell['id']] = True
 
+def get_execution_scope():
+    """
+    Constructs the execution scope by merging the persistent user scope
+    with standard library modules. This prevents modules from being stored
+    in session state (which causes pickling errors).
+    """
+    # Base scope from user session
+    scope = st.session_state.notebook_scope.copy()
+
+    # Inject modules
+    scope.update({
+        'pd': pd,
+        'np': np,
+        'plt': plt,
+        'sns': sns,
+        'st': st,
+    })
+    return scope
+
+def update_persistent_scope(exec_scope):
+    """
+    Updates the persistent session state with new variables from execution,
+    excluding the auto-injected modules. Handles additions, updates, and deletions.
+    """
+    # Keys to exclude from persistence (because they are auto-injected)
+    EXCLUDED_KEYS = {'pd', 'np', 'plt', 'sns', 'st'}
+
+    # 1. Update/Add new variables
+    for key, val in exec_scope.items():
+        if key.startswith('_'): continue
+        if key in EXCLUDED_KEYS: continue
+
+        st.session_state.notebook_scope[key] = val
+
+    # 2. Handle Deletions
+    # If a key exists in persistent scope but is missing from exec_scope, it was deleted.
+    # Note: We must operate on a list of keys to avoid RuntimeError during modification.
+    persistent_keys = list(st.session_state.notebook_scope.keys())
+    for key in persistent_keys:
+        if key not in exec_scope:
+            del st.session_state.notebook_scope[key]
+
 def execute_cell(cell_idx):
     if cell_idx < 0 or cell_idx >= len(st.session_state.notebook_cells):
         return
@@ -249,6 +287,9 @@ def execute_cell(cell_idx):
         output_buffer = io.StringIO()
         result_obj = None
 
+        # Get fresh scope
+        exec_scope = get_execution_scope()
+
         try:
             with contextlib.redirect_stdout(output_buffer):
                 # Parse code to handle last expression
@@ -256,7 +297,7 @@ def execute_cell(cell_idx):
                     tree = ast.parse(code)
                 except SyntaxError:
                     # If syntax error, just let exec fail
-                    exec(code, st.session_state.notebook_scope)
+                    exec(code, exec_scope)
                     tree = None
 
                 if tree and tree.body:
@@ -265,25 +306,29 @@ def execute_cell(cell_idx):
                         # Compile and exec everything before the last expression
                         if len(tree.body) > 1:
                             module = ast.Module(body=tree.body[:-1], type_ignores=[])
-                            exec(compile(module, filename="<string>", mode="exec"), st.session_state.notebook_scope)
+                            exec(compile(module, filename="<string>", mode="exec"), exec_scope)
 
                         # Eval the last expression
                         expr = ast.Expression(body=last_node.value)
-                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), st.session_state.notebook_scope)
+                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), exec_scope)
                     else:
                         # No expression at end, just exec all
-                        exec(code, st.session_state.notebook_scope)
+                        exec(code, exec_scope)
                 elif tree is None:
                     pass # Already executed in except block
                 else:
                     # Empty code
                     pass
 
+            # Persist changes back to session state
+            update_persistent_scope(exec_scope)
+
             st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
             st.session_state.notebook_cells[cell_idx]['result'] = result_obj
 
         except Exception as e:
-            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}"
+            # Catch all exceptions to prevent app crash
+            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
             st.session_state.notebook_cells[cell_idx]['result'] = None
 
     elif cell_type == 'sql':
@@ -291,23 +336,32 @@ def execute_cell(cell_idx):
             # Connect to DuckDB
             con = duckdb.connect()
 
-            # Register the dataframe if it exists
-            df = st.session_state.get('project_data')
-            if df is not None:
-                # Register as both 'df' and 'data' for convenience
-                con.register('df', df)
-                con.register('data', df)
+            # Get Python Scope
+            exec_scope = get_execution_scope()
 
-                try:
-                    # Execute Query and return as DataFrame
-                    result_df = con.execute(code).df()
-                    st.session_state.notebook_cells[cell_idx]['result'] = result_df
-                    st.session_state.notebook_cells[cell_idx]['output'] = ""
-                except Exception as e:
-                    st.session_state.notebook_cells[cell_idx]['output'] = f"SQL Error: {e}"
-                    st.session_state.notebook_cells[cell_idx]['result'] = None
-            else:
-                 st.session_state.notebook_cells[cell_idx]['output'] = "No dataset available."
+            # Register all DataFrames found in the scope
+            for var_name, var_val in exec_scope.items():
+                if isinstance(var_val, pd.DataFrame):
+                    try:
+                        con.register(var_name, var_val)
+                        # Also register 'data' if it's the main df
+                        if var_name == 'df':
+                            con.register('data', var_val)
+                    except Exception:
+                        pass # Ignore registration errors
+
+            try:
+                # Execute Query and return as DataFrame
+                result_df = con.execute(code).df()
+
+                # Save result to Python scope
+                st.session_state.notebook_scope['last_sql_result'] = result_df
+
+                st.session_state.notebook_cells[cell_idx]['result'] = result_df
+                st.session_state.notebook_cells[cell_idx]['output'] = ""
+            except Exception as e:
+                st.session_state.notebook_cells[cell_idx]['output'] = f"SQL Error: {e}"
+                st.session_state.notebook_cells[cell_idx]['result'] = None
         except Exception as e:
              st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
 
