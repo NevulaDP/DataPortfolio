@@ -15,7 +15,7 @@ from streamlit_quill import st_quill
 from streamlit_float import *
 from services.generator import project_generator
 from services.llm import LLMService
-from services.security import SafeExecutor, SecurityError
+from services.execution import ExecutionService
 from services.report_generator import generate_html_report
 from services.verifier import VerifierService
 from services.session_manager import serialize_session, deserialize_session
@@ -277,59 +277,37 @@ def execute_cell(cell_idx):
     cell_type = cell['type']
 
     if cell_type == 'code':
-        try:
-            SafeExecutor.validate(code)
-        except SecurityError as e:
-            st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
-            st.session_state.notebook_cells[cell_idx]['result'] = None
-            return
-
-        output_buffer = io.StringIO()
-        result_obj = None
-
         # Get fresh scope
         exec_scope = get_execution_scope()
 
-        try:
-            with contextlib.redirect_stdout(output_buffer):
-                # Parse code to handle last expression
-                try:
-                    tree = ast.parse(code)
-                except SyntaxError:
-                    # If syntax error, just let exec fail
-                    exec(code, exec_scope)
-                    tree = None
+        # Run in Secure Subprocess
+        result = ExecutionService.execute_code(code, exec_scope)
 
-                if tree and tree.body:
-                    last_node = tree.body[-1]
-                    if isinstance(last_node, ast.Expr):
-                        # Compile and exec everything before the last expression
-                        if len(tree.body) > 1:
-                            module = ast.Module(body=tree.body[:-1], type_ignores=[])
-                            exec(compile(module, filename="<string>", mode="exec"), exec_scope)
-
-                        # Eval the last expression
-                        expr = ast.Expression(body=last_node.value)
-                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), exec_scope)
-                    else:
-                        # No expression at end, just exec all
-                        exec(code, exec_scope)
-                elif tree is None:
-                    pass # Already executed in except block
-                else:
-                    # Empty code
-                    pass
-
-            # Persist changes back to session state
-            update_persistent_scope(exec_scope)
-
-            st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
-            st.session_state.notebook_cells[cell_idx]['result'] = result_obj
-
-        except Exception as e:
-            # Catch all exceptions to prevent app crash
-            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        # Handle Execution Results
+        if result.get('error'):
+            # Display Error
+            st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {result['error']}"
             st.session_state.notebook_cells[cell_idx]['result'] = None
+        else:
+            # Update Scope with Changes
+            if 'scope' in result:
+                update_persistent_scope(result['scope'])
+
+            # Update Output
+            st.session_state.notebook_cells[cell_idx]['output'] = result.get('stdout', '')
+
+            # Handle Plots
+            # We store plots in the 'result' field as a list of base64 strings
+            # The UI renderer will need to handle this differently than objects
+            if result.get('plots'):
+                # Store as a special object or just list
+                st.session_state.notebook_cells[cell_idx]['result'] = {
+                    'type': 'plots',
+                    'data': result['plots']
+                }
+            else:
+                # Use the 'result' object returned by AST eval in worker
+                st.session_state.notebook_cells[cell_idx]['result'] = result.get('result')
 
     elif cell_type == 'sql':
         try:
@@ -850,7 +828,12 @@ def render_notebook():
 
                     # Result Object Display
                     if cell.get('result') is not None:
-                        st.write(cell['result'])
+                        res = cell['result']
+                        if isinstance(res, dict) and res.get('type') == 'plots':
+                            for plot_b64 in res['data']:
+                                st.image(base64.b64decode(plot_b64))
+                        else:
+                            st.write(res)
 
                 elif cell['type'] == 'sql':
                     st.caption("SQL (DuckDB)")
