@@ -83,13 +83,48 @@ st.markdown("""
 
     /* Glowing Spinner */
     .loader {
+        position: relative;
         width: 80px;
         height: 80px;
-        border: 8px solid rgba(150, 150, 150, 0.2);
-        border-left-color: #FF4B4B; /* Streamlit Red */
         border-radius: 50%;
         animation: spin 1.2s linear infinite;
-        box-shadow: 0 0 20px rgba(255, 75, 75, 0.5);
+    }
+
+    /* Gradient Glow (Blur) */
+    .loader::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+            #0F1864,
+            #271781,
+            #317295,
+            #F29B3B,
+            #FF8080,
+            #0F1864
+        );
+        filter: blur(12px);
+        opacity: 0.8;
+    }
+
+    /* Sharp Gradient Ring */
+    .loader::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+            #0F1864,
+            #271781,
+            #317295,
+            #F29B3B,
+            #FF8080,
+            #0F1864
+        );
+        /* Mask to create the hole */
+        mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #fff calc(100% - 8px + 1px));
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #fff calc(100% - 8px + 1px));
     }
 
     @keyframes spin {
