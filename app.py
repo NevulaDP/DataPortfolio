@@ -5,20 +5,21 @@ import io
 import contextlib
 import os
 import traceback
-import matplotlib.pyplot as plt
-import seaborn as sns
+# import matplotlib.pyplot as plt # Moved to client side
+# import seaborn as sns # Moved to client side
 import uuid
 import ast
-import duckdb
+# import duckdb # Moved to client side
 from code_editor import code_editor
 from streamlit_quill import st_quill
 from streamlit_float import *
 from services.generator import project_generator
 from services.llm import LLMService
-from services.security import SafeExecutor, SecurityError
+# from services.security import SafeExecutor, SecurityError # Deprecated
 from services.report_generator import generate_html_report
 from services.verifier import VerifierService
 from services.session_manager import serialize_session, deserialize_session
+from services.bridge.component import execution_bridge
 
 # --- Page Config ---
 st.set_page_config(
@@ -40,6 +41,7 @@ if 'api_key' not in st.session_state:
     st.session_state.api_key = os.getenv("GEMINI_API_KEY", "")
 if 'notebook_cells' not in st.session_state:
     st.session_state.notebook_cells = []
+# notebook_scope is DEPRECATED for execution, but kept minimal for completions
 if 'notebook_scope' not in st.session_state:
     st.session_state.notebook_scope = {}
 # Track editing state for cells: {cell_id: boolean}
@@ -55,6 +57,10 @@ if 'verification_result' not in st.session_state:
     st.session_state.verification_result = None
 if 'generation_phase' not in st.session_state:
     st.session_state.generation_phase = 'idle' # idle, generating, complete
+if 'execution_request' not in st.session_state:
+    st.session_state.execution_request = None # {id, code, type}
+if 'data_loaded_hash' not in st.session_state:
+    st.session_state.data_loaded_hash = None
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -183,6 +189,9 @@ def load_session_callback():
                 st.session_state.generated_history = new_state['generated_history']
                 st.session_state.project_data = new_state['project_data']
 
+                # Reset data loaded hash to force reload in bridge
+                st.session_state.data_loaded_hash = None
+
                 # Re-init notebook scope
                 init_notebook_state()
 
@@ -193,12 +202,12 @@ def load_session_callback():
             st.error(f"Error loading session: {e}")
 
 def init_notebook_state():
-    # Initialize scope with common libraries and data
+    # Initialize scope with common libraries and data for COMPLETION purposes only
     st.session_state.notebook_scope = {
         'pd': pd,
         'np': np,
-        'plt': plt,
-        'sns': sns,
+        'plt': None, # Removed server side
+        'sns': None, # Removed server side
         'st': st,
         'df': st.session_state.get('project_data')
     }
@@ -231,85 +240,27 @@ def init_notebook_state():
                 st.session_state.cell_edit_state[cell['id']] = True
 
 def execute_cell(cell_idx):
+    """
+    Triggers execution by setting the request state and rerunning.
+    The actual execution happens in the bridge component during the next render.
+    """
     if cell_idx < 0 or cell_idx >= len(st.session_state.notebook_cells):
         return
 
     cell = st.session_state.notebook_cells[cell_idx]
-    code = cell['content']
-    cell_type = cell['type']
 
-    if cell_type == 'code':
-        try:
-            SafeExecutor.validate(code)
-        except SecurityError as e:
-            st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
-            st.session_state.notebook_cells[cell_idx]['result'] = None
-            return
+    # Set the request
+    st.session_state.execution_request = {
+        "id": cell['id'],
+        "code": cell['content'],
+        "type": cell['type']
+    }
 
-        output_buffer = io.StringIO()
-        result_obj = None
+    # Clear previous output
+    st.session_state.notebook_cells[cell_idx]['output'] = "Running..."
+    st.session_state.notebook_cells[cell_idx]['result'] = None
 
-        try:
-            with contextlib.redirect_stdout(output_buffer):
-                # Parse code to handle last expression
-                try:
-                    tree = ast.parse(code)
-                except SyntaxError:
-                    # If syntax error, just let exec fail
-                    exec(code, st.session_state.notebook_scope)
-                    tree = None
-
-                if tree and tree.body:
-                    last_node = tree.body[-1]
-                    if isinstance(last_node, ast.Expr):
-                        # Compile and exec everything before the last expression
-                        if len(tree.body) > 1:
-                            module = ast.Module(body=tree.body[:-1], type_ignores=[])
-                            exec(compile(module, filename="<string>", mode="exec"), st.session_state.notebook_scope)
-
-                        # Eval the last expression
-                        expr = ast.Expression(body=last_node.value)
-                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), st.session_state.notebook_scope)
-                    else:
-                        # No expression at end, just exec all
-                        exec(code, st.session_state.notebook_scope)
-                elif tree is None:
-                    pass # Already executed in except block
-                else:
-                    # Empty code
-                    pass
-
-            st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
-            st.session_state.notebook_cells[cell_idx]['result'] = result_obj
-
-        except Exception as e:
-            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}"
-            st.session_state.notebook_cells[cell_idx]['result'] = None
-
-    elif cell_type == 'sql':
-        try:
-            # Connect to DuckDB
-            con = duckdb.connect()
-
-            # Register the dataframe if it exists
-            df = st.session_state.get('project_data')
-            if df is not None:
-                # Register as both 'df' and 'data' for convenience
-                con.register('df', df)
-                con.register('data', df)
-
-                try:
-                    # Execute Query and return as DataFrame
-                    result_df = con.execute(code).df()
-                    st.session_state.notebook_cells[cell_idx]['result'] = result_df
-                    st.session_state.notebook_cells[cell_idx]['output'] = ""
-                except Exception as e:
-                    st.session_state.notebook_cells[cell_idx]['output'] = f"SQL Error: {e}"
-                    st.session_state.notebook_cells[cell_idx]['result'] = None
-            else:
-                 st.session_state.notebook_cells[cell_idx]['output'] = "No dataset available."
-        except Exception as e:
-             st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
+    st.rerun()
 
 def add_cell(cell_type, index=None):
     new_id = str(uuid.uuid4())
@@ -466,6 +417,7 @@ def render_loading_screen(placeholder):
 
         # Put data in global session state and scope
         st.session_state['project_data'] = df
+        st.session_state.data_loaded_hash = None # Reset so execution bridge reloads it
         init_notebook_state()
 
         # Initialize chat
@@ -790,7 +742,23 @@ def render_notebook():
 
                     # Result Object Display
                     if cell.get('result') is not None:
-                        st.write(cell['result'])
+                         # Handle simple strings or lists from Pyodide
+                        if isinstance(cell['result'], str) and cell['result'].startswith('{'):
+                             # Possible JSON from SQL
+                             try:
+                                 import json
+                                 data = json.loads(cell['result'])
+                                 st.dataframe(data)
+                             except:
+                                 st.write(cell['result'])
+                        else:
+                            st.write(cell['result'])
+
+                    # Images (Plots)
+                    if cell.get('images'):
+                        import base64
+                        for img_b64 in cell['images']:
+                            st.image(base64.b64decode(img_b64))
 
                 elif cell['type'] == 'sql':
                     st.caption("SQL (DuckDB)")
@@ -840,7 +808,11 @@ def render_notebook():
 
                     # Result Object Display
                     if cell.get('result') is not None:
-                        st.dataframe(cell['result'])
+                         # SQL results come back as list of dicts or JSON string
+                        if isinstance(cell['result'], list):
+                             st.dataframe(cell['result'])
+                        elif isinstance(cell['result'], str):
+                             st.text(cell['result'])
 
         # Render "Add" control after this cell (which corresponds to idx + 1)
         render_add_cell_controls(idx + 1)
@@ -1008,6 +980,78 @@ def render_workspace():
 # --- Main App Logic ---
 
 render_sidebar()
+
+# Initialize Execution Bridge Component (Hidden)
+# This handles the client-side Pyodide execution
+# It needs to be in the main tree, not inside a fragment if possible, or reliably rendered
+# We check if there is an execution request or data load needed
+
+# 1. Prepare Data for loading
+data_str = None
+cmd = None
+exec_code = None
+exec_id = None
+exec_type = None
+
+# Logic: If project data exists but not loaded, send 'load_data'
+if st.session_state.get('project_data') is not None:
+    # We use a simple hash of the dataframe's id or shape to detect changes
+    # But for now, we rely on the state variable `data_loaded_hash`
+    # Ideally, we should use a hash of the content, but let's assume if the object changes reference or we reset the hash.
+    current_df = st.session_state.get('project_data')
+    # Use id of object for stability
+    current_hash = str(id(current_df))
+
+    if st.session_state.data_loaded_hash != current_hash:
+        cmd = "load_data"
+        data_str = current_df.to_csv(index=False)
+        exec_id = "load_" + current_hash
+        # Update hash after *receiving* confirmation? Or now?
+        # Better to update now to avoid infinite loop, but if it fails we are out of sync.
+        # The bridge returns a status message.
+
+# Logic: If execution request exists, override/set 'execute'
+if st.session_state.execution_request:
+    req = st.session_state.execution_request
+    cmd = "execute"
+    exec_code = req['code']
+    exec_id = req['id']
+    exec_type = req['type']
+
+# Call Bridge
+bridge_response = execution_bridge(
+    cmd=cmd,
+    data=data_str,
+    code=exec_code,
+    cell_id=exec_id,
+    cell_type=exec_type,
+    key="exec_bridge"
+)
+
+# Handle Bridge Response
+if bridge_response:
+    # Check if it is a confirmation of data load
+    if bridge_response.get("status") == "data_loaded":
+        st.session_state.data_loaded_hash = str(id(st.session_state.get('project_data')))
+        # We don't need to rerun here, just next time it won't trigger load_data
+
+    # Check if it is an execution result
+    if bridge_response.get("type") == "execution_result":
+        res_id = bridge_response.get("id")
+
+        # Verify it matches current request to close the loop
+        if st.session_state.execution_request and st.session_state.execution_request['id'] == res_id:
+            # Update cell
+            for cell in st.session_state.notebook_cells:
+                if cell['id'] == res_id:
+                    cell['output'] = bridge_response.get('output', '')
+                    cell['result'] = bridge_response.get('result', None)
+                    cell['images'] = bridge_response.get('images', []) # Store images
+                    break
+
+            # Clear Request
+            st.session_state.execution_request = None
+            st.rerun()
 
 # Create a main placeholder to manage page transitions and ensure old content is cleared
 main_placeholder = st.empty()
