@@ -69,6 +69,28 @@ st.markdown("""
         border-radius: 5px;
     }
 
+    /* Pulse Animation */
+    @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.98); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+    .pulse-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 200px;
+        flex-direction: column;
+        font-family: sans-serif;
+        margin-top: 2rem;
+    }
+    .pulse-text {
+        font-size: 24px;
+        font-weight: 500;
+        color: #888;
+        animation: pulse 1.5s infinite ease-in-out;
+    }
+
     /* Dark Mode Support for st_quill */
     /* Target body with class added by JS injection */
     body.st-theme-dark iframe[title="streamlit_quill.streamlit_quill"] {
@@ -300,95 +322,109 @@ def generate_project():
         st.error("Please enter a sector.")
         return
 
-    with st.spinner(f"Generating synthetic data and scenario for '{st.session_state.sector_input}'..."):
-        try:
-            # Pass history to prevent repetition
-            history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
+    # Status Placeholder (Pulse Animation)
+    status_placeholder = st.empty()
 
-            # Step 1: Generate Narrative (Fixed)
-            narrative = project_generator._generate_scenario_narrative(
-                st.session_state.sector_input,
-                st.session_state.api_key,
-                previous_context=history_context
-            )
+    try:
+        # Pass history to prevent repetition
+        history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
-            if "error" in narrative:
-                st.error(narrative["error"])
-                return
+        # Step 1: Generate Narrative (Fixed)
+        status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Drafting Scenario Narrative...</div></div>', unsafe_allow_html=True)
+        narrative = project_generator._generate_scenario_narrative(
+            st.session_state.sector_input,
+            st.session_state.api_key,
+            previous_context=history_context
+        )
 
-            # Step 2: Generate Recipe & Data (Loop for correction)
-            max_retries = 3
-            current_try = 0
-            definition = None
-            df = None
-            verification = None
+        if "error" in narrative:
+            status_placeholder.empty()
+            st.error(narrative["error"])
+            return
 
-            while current_try < max_retries:
-                if current_try == 0:
-                    # Initial Recipe Generation
-                    definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
-                else:
-                    # Refinement based on feedback
-                    st.toast(f"Refining data recipe (Attempt {current_try+1})...", icon="🔄")
-                    definition = project_generator.refine_data_recipe(
-                        narrative,
-                        verification['issues'],
-                        st.session_state.api_key
-                    )
+        # Step 2: Generate Recipe & Data (Loop for correction)
+        max_retries = 3
+        current_try = 0
+        definition = None
+        df = None
+        verification = None
 
-                if "error" in definition:
-                    st.error(definition["error"])
-                    return
-
-                # Handle new "Schema-First" format (schema_list at root) vs Legacy (recipe key)
-                if 'schema_list' in definition:
-                    # Inject granularity manually if missing from LLM output but present in narrative
-                    if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
-                        definition['dataset_granularity'] = narrative['dataset_granularity']
-                    df = project_generator.generate_dataset(definition, rows=10000)
-                elif 'recipe' in definition:
-                    # Legacy fallback
-                    df = project_generator.generate_dataset(definition['recipe'], rows=10000)
-                else:
-                    st.error("Invalid recipe format received from AI.")
-                    return
-
-                # Verify
-                verification = verifier_service.verify_dataset_schema(
-                    definition,
-                    df,
+        while current_try < max_retries:
+            if current_try == 0:
+                # Initial Recipe Generation
+                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Designing Data Recipe...</div></div>', unsafe_allow_html=True)
+                definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
+            else:
+                # Refinement based on feedback
+                status_placeholder.markdown(f'<div class="pulse-container"><div class="pulse-text">Refining data (Attempt {current_try+1})...</div></div>', unsafe_allow_html=True)
+                definition = project_generator.refine_data_recipe(
+                    narrative,
+                    verification['issues'],
                     st.session_state.api_key
                 )
 
-                # Check Validity
-                if verification.get('valid', True):
-                    break # Success!
+            if "error" in definition:
+                status_placeholder.empty()
+                st.error(definition["error"])
+                return
 
-                current_try += 1
+            # Handle new "Schema-First" format (schema_list at root) vs Legacy (recipe key)
+            if 'schema_list' in definition:
+                # Inject granularity manually if missing from LLM output but present in narrative
+                if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
+                    definition['dataset_granularity'] = narrative['dataset_granularity']
+                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Generating Synthetic Data...</div></div>', unsafe_allow_html=True)
+                df = project_generator.generate_dataset(definition, rows=10000)
+            elif 'recipe' in definition:
+                # Legacy fallback
+                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Generating Synthetic Data...</div></div>', unsafe_allow_html=True)
+                df = project_generator.generate_dataset(definition['recipe'], rows=10000)
+            else:
+                status_placeholder.empty()
+                st.error("Invalid recipe format received from AI.")
+                return
 
-            # Store Final Results (even if invalid after max retries)
-            st.session_state.verification_result = verification
-            st.session_state.project = {
-                "definition": definition,
-                "data": df
-            }
+            # Verify
+            status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Verifying Data Quality...</div></div>', unsafe_allow_html=True)
+            verification = verifier_service.verify_dataset_schema(
+                definition,
+                df,
+                st.session_state.api_key
+            )
 
-            # Update history with the new project title and anchor
-            new_history_item = f"{definition.get('title', '')} ({definition.get('recipe', {}).get('anchor_entity', {}).get('name', '')})"
-            st.session_state.generated_history.append(new_history_item)
+            # Check Validity
+            if verification.get('valid', True):
+                break # Success!
 
-            # Put data in global session state and scope
-            st.session_state['project_data'] = df
-            init_notebook_state()
+            current_try += 1
 
-            # Initialize chat
-            st.session_state.messages = [{
-                "role": "assistant",
-                "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
-            }]
-        except Exception as e:
-            st.error(f"Error generating project: {e}")
-            traceback.print_exc()
+        # Clear Pulse
+        status_placeholder.empty()
+
+        # Store Final Results (even if invalid after max retries)
+        st.session_state.verification_result = verification
+        st.session_state.project = {
+            "definition": definition,
+            "data": df
+        }
+
+        # Update history with the new project title and anchor
+        new_history_item = f"{definition.get('title', '')} ({definition.get('recipe', {}).get('anchor_entity', {}).get('name', '')})"
+        st.session_state.generated_history.append(new_history_item)
+
+        # Put data in global session state and scope
+        st.session_state['project_data'] = df
+        init_notebook_state()
+
+        # Initialize chat
+        st.session_state.messages = [{
+            "role": "assistant",
+            "content": f"Hello! I'm your Senior Data Analyst mentor. I've prepared a project for you on **{definition['title']}**. Check out the scenario and let me know if you need help!"
+        }]
+    except Exception as e:
+        status_placeholder.empty()
+        st.error(f"Error generating project: {e}")
+        traceback.print_exc()
 
 def toggle_edit_mode(cell_id):
     current_state = st.session_state.cell_edit_state.get(cell_id, True)
