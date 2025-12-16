@@ -71,26 +71,46 @@ st.markdown("""
         border-radius: 5px;
     }
 
-    /* Pulse Animation */
-    @keyframes pulse {
-        0% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.5; transform: scale(0.98); }
-        100% { opacity: 1; transform: scale(1); }
-    }
-    .pulse-container {
+    /* Enhanced Loader */
+    .loading-container {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 200px;
-        flex-direction: column;
-        font-family: sans-serif;
-        margin-top: 2rem;
+        height: 70vh; /* Occupy most of the screen */
+        width: 100%;
     }
-    .pulse-text {
+
+    /* Glowing Spinner */
+    .loader {
+        width: 80px;
+        height: 80px;
+        border: 8px solid var(--secondary-background-color);
+        border-left-color: #FF4B4B; /* Streamlit Red */
+        border-radius: 50%;
+        animation: spin 1.2s linear infinite;
+        box-shadow: 0 0 20px rgba(255, 75, 75, 0.5);
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Pulsing Text */
+    .loading-text {
+        margin-top: 30px;
         font-size: 24px;
-        font-weight: 500;
-        color: #888;
-        animation: pulse 1.5s infinite ease-in-out;
+        font-weight: 600;
+        color: var(--text-color);
+        font-family: 'Source Sans Pro', sans-serif;
+        animation: pulse-text 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-text {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
     }
 
     /* Dark Mode Support for st_quill */
@@ -328,7 +348,13 @@ def render_loading_screen():
         history_context = st.session_state.generated_history[-5:] # Keep last 5 context items
 
         # Step 1: Generate Narrative (Fixed)
-        status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Drafting Scenario Narrative...</div></div>', unsafe_allow_html=True)
+        status_placeholder.markdown('''
+            <div class="loading-container">
+                <div class="loader"></div>
+                <div class="loading-text">Drafting Scenario Narrative...</div>
+            </div>
+        ''', unsafe_allow_html=True)
+
         narrative = project_generator._generate_scenario_narrative(
             st.session_state.sector_input,
             st.session_state.api_key,
@@ -337,9 +363,9 @@ def render_loading_screen():
 
         if "error" in narrative:
             status_placeholder.empty()
-            st.error(narrative["error"])
+            st.session_state['generation_error'] = narrative["error"]
             st.session_state.generation_phase = 'idle'
-            st.rerun() # Force rerun to show landing page again
+            st.rerun()
             return
 
         # Step 2: Generate Recipe & Data (Loop for correction)
@@ -352,11 +378,21 @@ def render_loading_screen():
         while current_try < max_retries:
             if current_try == 0:
                 # Initial Recipe Generation
-                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Designing Data Recipe...</div></div>', unsafe_allow_html=True)
+                status_placeholder.markdown('''
+                    <div class="loading-container">
+                        <div class="loader"></div>
+                        <div class="loading-text">Designing Data Recipe...</div>
+                    </div>
+                ''', unsafe_allow_html=True)
                 definition = project_generator._generate_data_recipe(narrative, st.session_state.api_key)
             else:
                 # Refinement based on feedback
-                status_placeholder.markdown(f'<div class="pulse-container"><div class="pulse-text">Refining data (Attempt {current_try+1})...</div></div>', unsafe_allow_html=True)
+                status_placeholder.markdown(f'''
+                    <div class="loading-container">
+                        <div class="loader"></div>
+                        <div class="loading-text">Refining data (Attempt {current_try+1})...</div>
+                    </div>
+                ''', unsafe_allow_html=True)
                 definition = project_generator.refine_data_recipe(
                     narrative,
                     verification['issues'],
@@ -365,7 +401,7 @@ def render_loading_screen():
 
             if "error" in definition:
                 status_placeholder.empty()
-                st.error(definition["error"])
+                st.session_state['generation_error'] = definition["error"]
                 st.session_state.generation_phase = 'idle'
                 st.rerun()
                 return
@@ -375,21 +411,36 @@ def render_loading_screen():
                 # Inject granularity manually if missing from LLM output but present in narrative
                 if 'dataset_granularity' not in definition and 'dataset_granularity' in narrative:
                     definition['dataset_granularity'] = narrative['dataset_granularity']
-                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Generating Synthetic Data...</div></div>', unsafe_allow_html=True)
+                status_placeholder.markdown('''
+                    <div class="loading-container">
+                        <div class="loader"></div>
+                        <div class="loading-text">Generating Synthetic Data...</div>
+                    </div>
+                ''', unsafe_allow_html=True)
                 df = project_generator.generate_dataset(definition, rows=10000)
             elif 'recipe' in definition:
                 # Legacy fallback
-                status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Generating Synthetic Data...</div></div>', unsafe_allow_html=True)
+                status_placeholder.markdown('''
+                    <div class="loading-container">
+                        <div class="loader"></div>
+                        <div class="loading-text">Generating Synthetic Data...</div>
+                    </div>
+                ''', unsafe_allow_html=True)
                 df = project_generator.generate_dataset(definition['recipe'], rows=10000)
             else:
                 status_placeholder.empty()
-                st.error("Invalid recipe format received from AI.")
+                st.session_state['generation_error'] = "Invalid recipe format received from AI."
                 st.session_state.generation_phase = 'idle'
                 st.rerun()
                 return
 
             # Verify
-            status_placeholder.markdown('<div class="pulse-container"><div class="pulse-text">Verifying Data Quality...</div></div>', unsafe_allow_html=True)
+            status_placeholder.markdown('''
+                <div class="loading-container">
+                    <div class="loader"></div>
+                    <div class="loading-text">Verifying Data Quality...</div>
+                </div>
+            ''', unsafe_allow_html=True)
             verification = verifier_service.verify_dataset_schema(
                 definition,
                 df,
@@ -432,7 +483,7 @@ def render_loading_screen():
 
     except Exception as e:
         status_placeholder.empty()
-        st.error(f"Error generating project: {e}")
+        st.session_state['generation_error'] = f"Error generating project: {e}"
         traceback.print_exc()
         st.session_state.generation_phase = 'idle'
         st.rerun()
@@ -863,6 +914,10 @@ def render_landing():
     2. **Analyze**: Use the built-in Jupyter Notebook to explore the data.
     3. **Get Mentorship**: A built-in AI mentor will guide you through the analysis.
     """)
+
+    # Display error from previous failed generation if any
+    if 'generation_error' in st.session_state:
+        st.error(st.session_state.pop('generation_error'))
 
     st.text_input("Enter a Sector (e.g., Retail, Healthcare, Finance)", key="sector_input")
     st.button("Start Project", on_click=start_generation_callback, type="primary")
