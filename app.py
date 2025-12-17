@@ -241,16 +241,15 @@ st.markdown("""
         background: linear-gradient(90deg, var(--loader-c2) 0%, var(--loader-c3) 100%);
         color: white !important;
         border: none;
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 0.75rem;
         font-weight: 600;
         transition: all 0.3s ease;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        white-space: nowrap;
     }
 
     div.stButton > button:hover {
-        background: linear-gradient(90deg, var(--loader-c3) 0%, var(--loader-c2) 100%); /* Reverse gradient on hover */
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        box-shadow: 0 0 12px var(--loader-c3); /* Glow effect */
         color: white !important;
     }
 
