@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Streamlit Pyodide Bridge</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; display: none; }
+    </style>
 </head>
 <body>
-    <div id="status">Initializing...</div>
     <script>
         // --- Streamlit Component Communication ---
         function sendMessageToStreamlit(data) {
@@ -37,6 +39,9 @@
 
         async function initPyodideRuntime() {
             try {
+                // Immediately hide
+                Streamlit.setFrameHeight(0);
+
                 pyodide = await loadPyodide();
                 await pyodide.loadPackage(["pandas", "matplotlib", "seaborn", "numpy"]);
 
@@ -47,6 +52,8 @@
                     import io
                     import base64
                     import matplotlib.pyplot as plt
+                    import warnings
+                    warnings.filterwarnings('ignore')
 
                     # Global connection
                     con = sqlite3.connect(":memory:")
@@ -65,6 +72,7 @@
                 sendMessageToStreamlit({ type: "status", content: "ready" });
                 console.log("Pyodide Ready");
             } catch (err) {
+                console.error("Pyodide Init Failed:", err);
                 sendMessageToStreamlit({ type: "error", content: err.toString() });
             }
         }
@@ -94,15 +102,10 @@
             if (!pyodide) return;
             try {
                 // Load data into Pandas and SQLite
-                // Using 'orient="split"' for efficiency if possible, or just standard json
-                // We assume payload is the raw JSON string compatible with pd.read_json
-
-                // We need to write the file to the virtual filesystem first or pass as string
                 pyodide.globals.set("data_json", jsonString);
                 await pyodide.runPythonAsync(`
                     import json
                     # Re-create DataFrame
-                    # Assuming 'split' orientation from server
                     df = pd.read_json(io.StringIO(data_json), orient='split')
 
                     # Sync to SQLite
@@ -111,6 +114,7 @@
                 `);
                 sendMessageToStreamlit({ type: "data_loaded", success: true });
             } catch (err) {
+                console.error("Data Load Failed:", err);
                 sendMessageToStreamlit({ type: "error", content: "Data Load Failed: " + err.toString() });
             }
         }
@@ -130,18 +134,12 @@
                 `);
 
                 // Run User Code
-                // We use eval_code logic similar to server side?
-                // Pyodide's runPython returns the last expression automatically if it's an expression
-                // But for complex scripts, we just run it.
-                // We rely on 'sys.stdout' for print() and return value for result.
-
                 let pyResult = await pyodide.runPythonAsync(code);
 
                 // Get stdout
                 output = pyodide.runPython("sys.stdout.getvalue()");
 
                 // Check for Plot
-                // We check if the current figure has axes
                 let hasPlot = pyodide.runPython("len(plt.get_fignums()) > 0");
                 if (hasPlot) {
                     image = pyodide.runPython("get_plot_as_image()");
@@ -150,8 +148,6 @@
                 // Format Result
                 if (pyResult !== undefined && pyResult !== null) {
                     result = pyResult.toString();
-                    // Attempt to convert to something nicer if it's a simple type?
-                    // For now, string representation is safest to pass back
                 }
 
                 sendMessageToStreamlit({
@@ -188,19 +184,18 @@
                 `);
 
                 let sqlJson = pyodide.globals.get("sql_json");
-                let sqlError = pyodide.globals.get("sql_error"); // Might be undefined if no error
+                let sqlError = pyodide.globals.get("sql_error");
 
                 if (sqlJson) {
                     sendMessageToStreamlit({
                         type: "execution_result",
                         cellId: cellId,
-                        result: sqlJson, // This is a JSON string of the DF
+                        result: sqlJson,
                         output: "",
                         success: true,
                         is_dataframe: true
                     });
                 } else {
-                     // Get the error from python scope if defined, otherwise generic
                      let err = pyodide.runPython("str(e) if 'e' in locals() else 'Unknown SQL Error'");
                      sendMessageToStreamlit({
                         type: "execution_result",
@@ -222,9 +217,6 @@
 
         // Start
         initPyodideRuntime();
-
-        // Notify ready to resize (hide)
-        Streamlit.setFrameHeight(0);
 
     </script>
 </body>
