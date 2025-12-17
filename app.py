@@ -81,55 +81,120 @@ st.markdown("""
         width: 100%;
     }
 
-    /* Glowing Spinner */
+    /* CSS Variables for Colors (Default to Dark) */
+    :root {
+        --loader-c1: #0F1864;
+        --loader-c2: #271781;
+        --loader-c3: #317295;
+        --loader-c4: #F29B3B;
+        --loader-c5: #FF8080;
+    }
+
+    /* Light Mode Overrides */
+    body.st-theme-light {
+        --loader-c1: #1E30C2;
+        --loader-c2: #4A33D6;
+        --loader-c3: #3E94C0;
+        --loader-c4: #F29B3B;
+        --loader-c5: #FF8080;
+    }
+
+    /* Wrapper for the Loader */
     .loader {
         position: relative;
         width: 80px;
         height: 80px;
-        border-radius: 50%;
-        animation: spin 1.2s linear infinite;
     }
 
-    /* Gradient Glow (Blur) */
-    .loader::before {
-        content: "";
+    /* Shared Logic for Layers (Main and Glow) */
+    .loader .loader-layer {
         position: absolute;
         inset: 0;
-        border-radius: 50%;
-        background: conic-gradient(
-            #0F1864,
-            #271781,
-            #317295,
-            #F29B3B,
-            #FF8080,
-            #0F1864
-        );
+        animation: spin 1.2s linear infinite;
+
+        /* The Comet Tail Mask */
+        mask: conic-gradient(from 0deg, transparent 50%, black 100%);
+        -webkit-mask: conic-gradient(from 0deg, transparent 50%, black 100%);
+    }
+
+    /* The Glow Layer (Behind) */
+    .loader .loader-layer.glow {
         filter: blur(12px);
         opacity: 0.8;
+        z-index: 0;
     }
 
-    /* Sharp Gradient Ring */
-    .loader::after {
-        content: "";
+    /* The Main Layer (Front) */
+    .loader .loader-layer.main {
+        z-index: 1;
+    }
+
+    /* The Static Color Ring (Counter-Rotating) */
+    .loader .loader-layer .ring {
         position: absolute;
         inset: 0;
         border-radius: 50%;
+
+        /* Full Spectrum Gradient Loop */
         background: conic-gradient(
-            #0F1864,
-            #271781,
-            #317295,
-            #F29B3B,
-            #FF8080,
-            #0F1864
+            from 0deg,
+            var(--loader-c1),
+            var(--loader-c2),
+            var(--loader-c3),
+            var(--loader-c4),
+            var(--loader-c5),
+            var(--loader-c1)
         );
-        /* Mask to create the hole */
+
+        /* The Hole */
         mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #fff calc(100% - 8px + 1px));
         -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #fff calc(100% - 8px + 1px));
+
+        /* Counter-Rotation to keep colors static */
+        animation: spin-reverse 1.2s linear infinite;
+    }
+
+    /* The Round Cap (Rotating with Window) */
+    .loader .loader-layer .cap {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        transform: translateX(-50%);
+        border-radius: 50%;
+        overflow: hidden; /* Mask the inner gradient to the circle */
+    }
+
+    /* The Cap's Inner Gradient (Counter-Rotating) */
+    .loader .loader-layer .cap .cap-inner {
+        position: absolute;
+        width: 80px; /* Size of parent loader */
+        height: 80px;
+        top: -4px; /* Offset to align center of gradient with center of loader */
+        left: -36px;
+
+        background: conic-gradient(
+            from 0deg,
+            var(--loader-c1),
+            var(--loader-c2),
+            var(--loader-c3),
+            var(--loader-c4),
+            var(--loader-c5),
+            var(--loader-c1)
+        );
+
+        animation: spin-reverse 1.2s linear infinite;
     }
 
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-reverse {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(-360deg); }
     }
 
     /* Pulsing Text */
@@ -442,7 +507,16 @@ def render_loading_screen(placeholder):
         # Step 1: Generate Narrative (Fixed)
         placeholder.markdown('''
             <div class="loading-container">
-                <div class="loader"></div>
+                <div class="loader">
+                    <div class="loader-layer glow">
+                        <div class="ring"></div>
+                        <div class="cap"><div class="cap-inner"></div></div>
+                    </div>
+                    <div class="loader-layer main">
+                        <div class="ring"></div>
+                        <div class="cap"><div class="cap-inner"></div></div>
+                    </div>
+                </div>
                 <div class="loading-text">Drafting Scenario Narrative...</div>
             </div>
         ''', unsafe_allow_html=True)
@@ -472,7 +546,16 @@ def render_loading_screen(placeholder):
                 # Initial Recipe Generation
                 placeholder.markdown('''
                     <div class="loading-container">
-                        <div class="loader"></div>
+                        <div class="loader">
+                            <div class="loader-layer glow">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="loader-layer main">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                        </div>
                         <div class="loading-text">Designing Data Recipe...</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -481,7 +564,16 @@ def render_loading_screen(placeholder):
                 # Refinement based on feedback
                 placeholder.markdown(f'''
                     <div class="loading-container">
-                        <div class="loader"></div>
+                        <div class="loader">
+                            <div class="loader-layer glow">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="loader-layer main">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                        </div>
                         <div class="loading-text">Refining data (Attempt {current_try+1})...</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -505,7 +597,16 @@ def render_loading_screen(placeholder):
                     definition['dataset_granularity'] = narrative['dataset_granularity']
                 placeholder.markdown('''
                     <div class="loading-container">
-                        <div class="loader"></div>
+                        <div class="loader">
+                            <div class="loader-layer glow">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="loader-layer main">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                        </div>
                         <div class="loading-text">Generating Synthetic Data...</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -514,7 +615,16 @@ def render_loading_screen(placeholder):
                 # Legacy fallback
                 placeholder.markdown('''
                     <div class="loading-container">
-                        <div class="loader"></div>
+                        <div class="loader">
+                            <div class="loader-layer glow">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="loader-layer main">
+                                <div class="ring"></div>
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                        </div>
                         <div class="loading-text">Generating Synthetic Data...</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -529,7 +639,16 @@ def render_loading_screen(placeholder):
             # Verify
             placeholder.markdown('''
                 <div class="loading-container">
-                    <div class="loader"></div>
+                    <div class="loader">
+                        <div class="loader-layer glow">
+                            <div class="ring"></div>
+                            <div class="cap"><div class="cap-inner"></div></div>
+                        </div>
+                        <div class="loader-layer main">
+                            <div class="ring"></div>
+                            <div class="cap"><div class="cap-inner"></div></div>
+                        </div>
+                    </div>
                     <div class="loading-text">Verifying Data Quality...</div>
                 </div>
             ''', unsafe_allow_html=True)
