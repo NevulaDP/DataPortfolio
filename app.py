@@ -236,7 +236,7 @@ st.markdown("""
 
     /* --- New Branding Styles --- */
 
-    /* Buttons: Gradient Styling */
+    /* Buttons: Gradient Styling (Default / Dark Mode) */
     div.stButton > button {
         background: linear-gradient(90deg, var(--loader-c2) 0%, var(--loader-c3) 100%);
         color: white !important;
@@ -251,6 +251,15 @@ st.markdown("""
     div.stButton > button:hover {
         box-shadow: 0 0 12px var(--loader-c3); /* Glow effect */
         color: white !important;
+    }
+
+    /* Buttons: Light Mode Overrides */
+    body.st-theme-light div.stButton > button {
+        background: linear-gradient(90deg, var(--loader-c1) 0%, var(--loader-c2) 100%);
+    }
+
+    body.st-theme-light div.stButton > button:hover {
+        box-shadow: 0 0 12px var(--loader-c2); /* Glow effect */
     }
 
     div.stButton > button:active {
