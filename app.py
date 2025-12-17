@@ -68,7 +68,7 @@ st.markdown("""
         padding-bottom: 2rem;
     }
     .stButton button {
-        border-radius: 5px;
+        border-radius: 24px;
     }
 
     /* Enhanced Loader */
