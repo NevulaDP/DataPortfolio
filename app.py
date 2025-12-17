@@ -124,15 +124,17 @@ def handle_bridge_response(response):
 # Render Bridge (Invisible)
 # We only pass the command if it exists
 # We use a persistent key so the iframe doesn't reload.
-cmd = st.session_state.get('bridge_command')
-bridge_response = execution_bridge(
-    command=cmd['command'] if cmd else None,
-    payload=cmd['payload'] if cmd else None,
-    key="persistent_bridge"
-)
+# Only render if we are in a project or generating one to prevent landing page errors.
+if st.session_state.project is not None or st.session_state.generation_phase == 'generating':
+    cmd = st.session_state.get('bridge_command')
+    bridge_response = execution_bridge(
+        command=cmd['command'] if cmd else None,
+        payload=cmd['payload'] if cmd else None,
+        key="persistent_bridge"
+    )
 
-# Handle Bridge Response
-handle_bridge_response(bridge_response)
+    # Handle Bridge Response
+    handle_bridge_response(bridge_response)
 
 # --- Custom CSS for Layout ---
 st.markdown("""
