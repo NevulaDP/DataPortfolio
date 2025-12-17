@@ -1264,7 +1264,7 @@ def render_landing():
     with c_main:
         # Headers
         st.markdown('<div class="landing-header">Hi Analyst</div>', unsafe_allow_html=True)
-        st.markdown('<div class="landing-sub">Where should we start?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="landing-sub">Ready to build your next project?</div>', unsafe_allow_html=True)
 
         # Input & Settings Bar
         # We use a column layout to put the settings gear next to the input
