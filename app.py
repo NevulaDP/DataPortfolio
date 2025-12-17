@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+import json
 import contextlib
 import os
 import traceback
@@ -85,7 +86,13 @@ def handle_bridge_response(response):
 
     elif type == "data_loaded":
         st.session_state["data_synced_to_bridge"] = True
-        # st.toast("Environment Ready", icon="⚡")
+
+        # Update Scope
+        if "scope" in response:
+            try:
+                st.session_state.notebook_scope = json.loads(response["scope"])
+            except Exception as e:
+                print(f"Error parsing scope: {e}")
 
     elif type == "execution_result":
         cell_id = response.get("cellId")
@@ -94,6 +101,13 @@ def handle_bridge_response(response):
         result = response.get("result")
         image = response.get("image")
         is_dataframe = response.get("is_dataframe", False)
+
+        # Update Scope from execution
+        if "scope" in response:
+            try:
+                st.session_state.notebook_scope = json.loads(response["scope"])
+            except Exception as e:
+                print(f"Error parsing scope: {e}")
 
         # Find cell index
         cell_idx = next((i for i, c in enumerate(st.session_state.notebook_cells) if c['id'] == cell_id), -1)
@@ -719,9 +733,18 @@ def get_python_completions():
 
     # 1. Scope Variables
     scope = st.session_state.get('notebook_scope', {})
-    for var_name, var_val in scope.items():
+    for var_name, metadata in scope.items():
         if var_name.startswith('_'): continue
-        meta_type = type(var_val).__name__
+
+        # Handle metadata which should be a dict from the bridge
+        # Fallback for empty or legacy states
+        if isinstance(metadata, dict):
+            meta_type = metadata.get('type', 'Object')
+            columns = metadata.get('columns', [])
+        else:
+            # Should not happen in new architecture, but safe fallback
+            meta_type = "Object"
+            columns = []
 
         # Add variable itself
         completions.append({
@@ -731,9 +754,9 @@ def get_python_completions():
             "score": 1000
         })
 
-        # If it's a dataframe, add columns
-        if isinstance(var_val, pd.DataFrame):
-            for col in var_val.columns:
+        # If it's a dataframe (has columns), add columns
+        if columns:
+            for col in columns:
                 col_str = str(col)
                 # Add as string literal (useful for df['...'])
                 completions.append({

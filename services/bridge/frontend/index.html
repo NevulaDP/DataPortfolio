@@ -12,38 +12,51 @@
 <body>
     <script>
         // --- Streamlit Component Communication ---
+
         function sendMessageToStreamlit(data) {
-            Streamlit.setComponentValue(data);
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: "streamlit:setComponentValue",
+                value: data
+            }, "*");
         }
 
-        const Streamlit = {
-            setComponentValue: (value) => {
-                window.parent.postMessage({
-                    isStreamlitMessage: true,
-                    type: "setComponentValue",
-                    value: value
-                }, "*");
-            },
-            setFrameHeight: (height) => {
-                window.parent.postMessage({
-                    isStreamlitMessage: true,
-                    type: "setFrameHeight",
-                    height: height
-                }, "*");
-            }
-        };
+        function setFrameHeight(height) {
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: "streamlit:setFrameHeight",
+                height: height
+            }, "*");
+        }
+
+        function sendReady() {
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: "streamlit:componentReady",
+                apiVersion: 1
+            }, "*");
+        }
 
         // --- Pyodide State ---
         let pyodide = null;
         let isReady = false;
 
+        async function ensureReady() {
+            while (!isReady) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+        }
+
         async function initPyodideRuntime() {
             try {
-                // Immediately hide
-                Streamlit.setFrameHeight(0);
+                // Signal Ready immediately so Streamlit accepts messages
+                sendReady();
+                setFrameHeight(0);
 
                 pyodide = await loadPyodide();
-                await pyodide.loadPackage(["pandas", "matplotlib", "seaborn", "numpy"]);
+
+                // Added sqlite3 as required by Pyodide docs
+                await pyodide.loadPackage(["pandas", "matplotlib", "numpy", "sqlite3"]);
 
                 // Initialize SQLite environment
                 await pyodide.runPythonAsync(`
@@ -53,6 +66,7 @@
                     import base64
                     import matplotlib.pyplot as plt
                     import warnings
+                    import json
                     warnings.filterwarnings('ignore')
 
                     # Global connection
@@ -66,6 +80,22 @@
                         img_str = base64.b64encode(buf.read()).decode('utf-8')
                         plt.clf()
                         return img_str
+
+                    # Helper to get scope variables for autocomplete
+                    def get_scope_vars():
+                        vars = {}
+                        for name, val in globals().items():
+                            if name.startswith('_'): continue
+                            if name in ['sqlite3', 'pd', 'io', 'base64', 'plt', 'warnings', 'json', 'con', 'get_plot_as_image', 'get_scope_vars', 'sys', 'StringIO', 'data_json', 'user_query', 'pyResult', 'hasPlot', 'sql_res', 'sql_json', 'sql_error']:
+                                continue
+
+                            type_name = type(val).__name__
+                            vars[name] = {"type": type_name}
+
+                            # If dataframe, get columns
+                            if isinstance(val, pd.DataFrame):
+                                vars[name]['columns'] = list(val.columns.astype(str))
+                        return json.dumps(vars)
                 `);
 
                 isReady = true;
@@ -83,13 +113,8 @@
             if (data.type === "streamlit:render") {
                 const args = data.args; // { command: "init"|"execute", payload: ... }
 
-                if (!isReady) {
-                    // Queue or ignore? For now, we wait for ready in the python side logic
-                    // But if we get an init command, we can process data loading
-                }
-
                 if (args.command === "init_data") {
-                    await loadData(args.payload); // payload is JSON string of dataframe
+                    await loadData(args.payload);
                 } else if (args.command === "execute_code") {
                     await executeCode(args.payload.code, args.payload.id);
                 } else if (args.command === "execute_sql") {
@@ -99,7 +124,7 @@
         });
 
         async function loadData(jsonString) {
-            if (!pyodide) return;
+            await ensureReady();
             try {
                 // Load data into Pandas and SQLite
                 pyodide.globals.set("data_json", jsonString);
@@ -112,7 +137,11 @@
                     df.to_sql('data', con, if_exists='replace', index=False)
                     df.to_sql('df', con, if_exists='replace', index=False)
                 `);
-                sendMessageToStreamlit({ type: "data_loaded", success: true });
+
+                // Get scope update
+                let scope = pyodide.runPython("get_scope_vars()");
+
+                sendMessageToStreamlit({ type: "data_loaded", success: true, scope: scope });
             } catch (err) {
                 console.error("Data Load Failed:", err);
                 sendMessageToStreamlit({ type: "error", content: "Data Load Failed: " + err.toString() });
@@ -120,7 +149,7 @@
         }
 
         async function executeCode(code, cellId) {
-            if (!pyodide) return;
+            await ensureReady();
             let output = "";
             let result = null;
             let image = null;
@@ -150,12 +179,16 @@
                     result = pyResult.toString();
                 }
 
+                // Get Scope Update
+                let scope = pyodide.runPython("get_scope_vars()");
+
                 sendMessageToStreamlit({
                     type: "execution_result",
                     cellId: cellId,
                     output: output,
                     result: result,
                     image: image,
+                    scope: scope,
                     success: true
                 });
 
@@ -170,7 +203,7 @@
         }
 
         async function executeSQL(query, cellId) {
-            if (!pyodide) return;
+            await ensureReady();
             try {
                 // We use pandas read_sql to execute and return result as JSON
                 pyodide.globals.set("user_query", query);
