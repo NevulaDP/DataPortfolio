@@ -97,12 +97,13 @@ st.markdown("""
         inset: 0;
         border-radius: 50%;
         background: conic-gradient(
-            #0F1864,
-            #271781,
-            #317295,
-            #F29B3B,
-            #FF8080,
-            #0F1864
+            from 0deg,
+            transparent 0%,
+            #0F1864 20%,
+            #271781 40%,
+            #317295 60%,
+            #F29B3B 80%,
+            #FF8080 100%
         );
         filter: blur(12px);
         opacity: 0.8;
@@ -115,12 +116,13 @@ st.markdown("""
         inset: 0;
         border-radius: 50%;
         background: conic-gradient(
-            #0F1864,
-            #271781,
-            #317295,
-            #F29B3B,
-            #FF8080,
-            #0F1864
+            from 0deg,
+            transparent 0%,
+            #0F1864 20%,
+            #271781 40%,
+            #317295 60%,
+            #F29B3B 80%,
+            #FF8080 100%
         );
         /* Mask to create the hole */
         mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #fff calc(100% - 8px + 1px));
