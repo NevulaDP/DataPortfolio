@@ -113,9 +113,8 @@ st.markdown("""
         animation: spin 1.2s linear infinite;
 
         /* The Comet Tail Mask */
-        /* Rotate mask slightly (15deg) to ensure the Cap (at 0deg) is not clipped by the start/end seam */
-        mask: conic-gradient(from 15deg, transparent 50%, black 100%);
-        -webkit-mask: conic-gradient(from 15deg, transparent 50%, black 100%);
+        mask: conic-gradient(from 0deg, transparent 50%, black 100%);
+        -webkit-mask: conic-gradient(from 0deg, transparent 50%, black 100%);
     }
 
     /* Shared Ring Styles (Static Colors, Counter-Rotating) */
@@ -150,11 +149,18 @@ st.markdown("""
     }
 
     .loader .spinner .ring.main {
-        z-index: 2;
+        z-index: 3;
     }
 
-    /* The Round Cap (Rotating with Window) */
-    .loader .spinner .cap {
+    /* Unmasked Cap Container (Sibling to Spinner) */
+    .loader .cap-container {
+        position: absolute;
+        inset: 0;
+        animation: spin 1.2s linear infinite; /* Synced rotation */
+    }
+
+    /* The Round Cap Circle */
+    .loader .cap-container .cap {
         position: absolute;
         top: 10px; /* Matches inset of ring */
         left: 50%;
@@ -165,18 +171,18 @@ st.markdown("""
         overflow: hidden;
     }
 
-    .loader .spinner .cap.glow {
+    .loader .cap-container.glow {
         filter: blur(8px);
         opacity: 0.8;
-        z-index: 3;
+        z-index: 2;
     }
 
-    .loader .spinner .cap.main {
+    .loader .cap-container.main {
         z-index: 4;
     }
 
     /* The Cap's Inner Gradient (Counter-Rotating) */
-    .loader .spinner .cap .cap-inner {
+    .loader .cap-container .cap .cap-inner {
         position: absolute;
         width: 80px; /* Ring Size */
         height: 80px;
@@ -520,8 +526,12 @@ def render_loading_screen(placeholder):
                     <div class="spinner">
                         <div class="ring glow"></div>
                         <div class="ring main"></div>
-                        <div class="cap glow"><div class="cap-inner"></div></div>
-                        <div class="cap main"><div class="cap-inner"></div></div>
+                    </div>
+                    <div class="cap-container glow">
+                        <div class="cap"><div class="cap-inner"></div></div>
+                    </div>
+                    <div class="cap-container main">
+                        <div class="cap"><div class="cap-inner"></div></div>
                     </div>
                 </div>
                 <div class="loading-text">Drafting Scenario Narrative...</div>
@@ -557,8 +567,12 @@ def render_loading_screen(placeholder):
                             <div class="spinner">
                                 <div class="ring glow"></div>
                                 <div class="ring main"></div>
-                                <div class="cap glow"><div class="cap-inner"></div></div>
-                                <div class="cap main"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container glow">
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container main">
+                                <div class="cap"><div class="cap-inner"></div></div>
                             </div>
                         </div>
                         <div class="loading-text">Designing Data Recipe...</div>
@@ -573,8 +587,12 @@ def render_loading_screen(placeholder):
                             <div class="spinner">
                                 <div class="ring glow"></div>
                                 <div class="ring main"></div>
-                                <div class="cap glow"><div class="cap-inner"></div></div>
-                                <div class="cap main"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container glow">
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container main">
+                                <div class="cap"><div class="cap-inner"></div></div>
                             </div>
                         </div>
                         <div class="loading-text">Refining data (Attempt {current_try+1})...</div>
@@ -604,8 +622,12 @@ def render_loading_screen(placeholder):
                             <div class="spinner">
                                 <div class="ring glow"></div>
                                 <div class="ring main"></div>
-                                <div class="cap glow"><div class="cap-inner"></div></div>
-                                <div class="cap main"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container glow">
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container main">
+                                <div class="cap"><div class="cap-inner"></div></div>
                             </div>
                         </div>
                         <div class="loading-text">Generating Synthetic Data...</div>
@@ -620,8 +642,12 @@ def render_loading_screen(placeholder):
                             <div class="spinner">
                                 <div class="ring glow"></div>
                                 <div class="ring main"></div>
-                                <div class="cap glow"><div class="cap-inner"></div></div>
-                                <div class="cap main"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container glow">
+                                <div class="cap"><div class="cap-inner"></div></div>
+                            </div>
+                            <div class="cap-container main">
+                                <div class="cap"><div class="cap-inner"></div></div>
                             </div>
                         </div>
                         <div class="loading-text">Generating Synthetic Data...</div>
@@ -642,8 +668,12 @@ def render_loading_screen(placeholder):
                         <div class="spinner">
                             <div class="ring glow"></div>
                             <div class="ring main"></div>
-                            <div class="cap glow"><div class="cap-inner"></div></div>
-                            <div class="cap main"><div class="cap-inner"></div></div>
+                        </div>
+                        <div class="cap-container glow">
+                            <div class="cap"><div class="cap-inner"></div></div>
+                        </div>
+                        <div class="cap-container main">
+                            <div class="cap"><div class="cap-inner"></div></div>
                         </div>
                     </div>
                     <div class="loading-text">Verifying Data Quality...</div>
