@@ -154,7 +154,7 @@ if st.session_state.project is not None or st.session_state.generation_phase == 
         handle_bridge_response(bridge_response)
 
     # Float the container off-screen
-    bridge_container.float("position: fixed; top: -1000px; left: -1000px; width: 0; height: 0; overflow: hidden;")
+    bridge_container.float("position: fixed; top: -1000px; left: -1000px; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none;")
 
 # --- Custom CSS for Layout ---
 st.markdown("""
@@ -334,7 +334,7 @@ st.markdown("""
 
 # Inject JS to detect theme based on computed background color
 import streamlit.components.v1 as components
-components.html("""
+components.html(r"""
 <script>
     function checkTheme() {
         try {
