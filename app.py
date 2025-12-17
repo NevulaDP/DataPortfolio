@@ -1111,7 +1111,7 @@ def render_sidebar():
         st.divider()
 
         # Load Session (Always available)
-        with st.popover("📂 Load Session", use_container_width=True):
+        with st.expander("📂 Load Session", expanded=False):
             st.markdown("Upload a previously saved `.json` session file.")
             st.file_uploader(
                 "Upload session file",
