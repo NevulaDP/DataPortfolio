@@ -233,6 +233,53 @@ st.markdown("""
     body.st-theme-dark iframe[title="streamlit_quill.streamlit_quill"] {
         filter: invert(1) hue-rotate(180deg);
     }
+
+    /* --- New Branding Styles --- */
+
+    /* Buttons: Gradient Styling */
+    div.stButton > button {
+        background: linear-gradient(90deg, var(--loader-c2) 0%, var(--loader-c3) 100%);
+        color: white !important;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    div.stButton > button:hover {
+        background: linear-gradient(90deg, var(--loader-c3) 0%, var(--loader-c2) 100%); /* Reverse gradient on hover */
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        color: white !important;
+    }
+
+    div.stButton > button:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Headers: Gradient Text */
+    /* Default (Dark Mode) - Bright Warm Colors */
+    h1, h2, h3 {
+        background: linear-gradient(90deg, var(--loader-c4), var(--loader-c5));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        color: transparent;
+        width: fit-content; /* Ensure gradient doesn't stretch full width if not needed */
+    }
+
+    /* Light Mode - Deep Cool Colors */
+    body.st-theme-light h1,
+    body.st-theme-light h2,
+    body.st-theme-light h3 {
+        background: linear-gradient(90deg, var(--loader-c1), var(--loader-c2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        color: transparent;
+    }
 </style>
 """, unsafe_allow_html=True)
 
