@@ -8,7 +8,6 @@ python-dotenv
 seaborn
 streamlit>=1.33.0
 streamlit-code-editor
-duckdb
 streamlit-quill
 streamlit-float
 markdown

@@ -9,16 +9,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import uuid
 import ast
-import duckdb
 from code_editor import code_editor
 from streamlit_quill import st_quill
 from streamlit_float import *
 from services.generator import project_generator
 from services.llm import LLMService
-from services.security import SafeExecutor, SecurityError
 from services.report_generator import generate_html_report
 from services.verifier import VerifierService
 from services.session_manager import serialize_session, deserialize_session
+from services.bridge import execution_bridge
 
 # --- Page Config ---
 st.set_page_config(
@@ -55,10 +54,84 @@ if 'verification_result' not in st.session_state:
     st.session_state.verification_result = None
 if 'generation_phase' not in st.session_state:
     st.session_state.generation_phase = 'idle' # idle, generating, complete
+if 'bridge_command' not in st.session_state:
+    st.session_state.bridge_command = None # {command: "...", payload: "...", id: "..."}
+if 'bridge_ready' not in st.session_state:
+    st.session_state.bridge_ready = False
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
 verifier_service = VerifierService()
+
+
+# --- Bridge Logic ---
+
+def handle_bridge_response(response):
+    if not response:
+        return
+
+    type = response.get("type")
+
+    if type == "status" and response.get("content") == "ready":
+        st.session_state.bridge_ready = True
+        # If we have data pending load (e.g. from session load), send it now
+        if st.session_state.get("project_data") is not None and not st.session_state.get("data_synced_to_bridge"):
+             json_data = st.session_state.project_data.to_json(orient='split', date_format='iso')
+             st.session_state.bridge_command = {
+                "command": "init_data",
+                "payload": json_data,
+                "id": str(uuid.uuid4())
+            }
+
+    elif type == "data_loaded":
+        st.session_state["data_synced_to_bridge"] = True
+        # st.toast("Environment Ready", icon="⚡")
+
+    elif type == "execution_result":
+        cell_id = response.get("cellId")
+        success = response.get("success")
+        output = response.get("output", "")
+        result = response.get("result")
+        image = response.get("image")
+        is_dataframe = response.get("is_dataframe", False)
+
+        # Find cell index
+        cell_idx = next((i for i, c in enumerate(st.session_state.notebook_cells) if c['id'] == cell_id), -1)
+
+        if cell_idx != -1:
+            st.session_state.notebook_cells[cell_idx]['output'] = output
+
+            # If result is a JSON string of a DataFrame (from SQL or Py)
+            if is_dataframe and result:
+                 try:
+                     st.session_state.notebook_cells[cell_idx]['result'] = pd.read_json(io.StringIO(result), orient='split')
+                 except Exception:
+                      st.session_state.notebook_cells[cell_idx]['result'] = result
+            else:
+                st.session_state.notebook_cells[cell_idx]['result'] = result
+
+            # If image, we append it to output or handle it (currently we don't have a dedicated image field in cell,
+            # but we can render it. We'll store it in 'result' if 'result' is None, or a special 'image' key)
+            if image:
+                # We can store the base64 image in a special way
+                # For now, let's store it in a new key 'image' in the cell
+                st.session_state.notebook_cells[cell_idx]['image'] = image
+
+        # Clear command after processing
+        st.session_state.bridge_command = None
+
+
+# Render Bridge (Invisible)
+# We only pass the command if it exists
+cmd = st.session_state.get('bridge_command')
+bridge_response = execution_bridge(
+    command=cmd['command'] if cmd else None,
+    payload=cmd['payload'] if cmd else None,
+    key=cmd['id'] if cmd else "bridge_idle"
+)
+
+# Handle Bridge Response
+handle_bridge_response(bridge_response)
 
 # --- Custom CSS for Layout ---
 st.markdown("""
@@ -308,12 +381,6 @@ def load_session_callback():
             st.error(f"Error loading session: {e}")
 
 def init_notebook_state():
-    # Initialize scope with user data only (modules are injected at execution time)
-    # We only store variables that need persistence (like df, user vars)
-    st.session_state.notebook_scope = {
-        'df': st.session_state.get('project_data')
-    }
-
     # Initial Cells
     if not st.session_state.notebook_cells:
         st.session_state.notebook_cells = [
@@ -341,47 +408,12 @@ def init_notebook_state():
             if cell['type'] == 'markdown':
                 st.session_state.cell_edit_state[cell['id']] = True
 
-def get_execution_scope():
-    """
-    Constructs the execution scope by merging the persistent user scope
-    with standard library modules. This prevents modules from being stored
-    in session state (which causes pickling errors).
-    """
-    # Base scope from user session
-    scope = st.session_state.notebook_scope.copy()
+    # Trigger Bridge Data Load if data exists but not loaded
+    if st.session_state.get('project_data') is not None:
+         # We need to send this to the bridge. We do this via the bridge_command
+         # But usually we do this on first load of workspace.
+         pass
 
-    # Inject modules
-    scope.update({
-        'pd': pd,
-        'np': np,
-        'plt': plt,
-        'sns': sns,
-        'st': st,
-    })
-    return scope
-
-def update_persistent_scope(exec_scope):
-    """
-    Updates the persistent session state with new variables from execution,
-    excluding the auto-injected modules. Handles additions, updates, and deletions.
-    """
-    # Keys to exclude from persistence (because they are auto-injected)
-    EXCLUDED_KEYS = {'pd', 'np', 'plt', 'sns', 'st'}
-
-    # 1. Update/Add new variables
-    for key, val in exec_scope.items():
-        if key.startswith('_'): continue
-        if key in EXCLUDED_KEYS: continue
-
-        st.session_state.notebook_scope[key] = val
-
-    # 2. Handle Deletions
-    # If a key exists in persistent scope but is missing from exec_scope, it was deleted.
-    # Note: We must operate on a list of keys to avoid RuntimeError during modification.
-    persistent_keys = list(st.session_state.notebook_scope.keys())
-    for key in persistent_keys:
-        if key not in exec_scope:
-            del st.session_state.notebook_scope[key]
 
 def execute_cell(cell_idx):
     if cell_idx < 0 or cell_idx >= len(st.session_state.notebook_cells):
@@ -392,99 +424,24 @@ def execute_cell(cell_idx):
     cell_type = cell['type']
 
     if cell_type == 'code':
-        try:
-            SafeExecutor.validate(code)
-        except SecurityError as e:
-            st.session_state.notebook_cells[cell_idx]['output'] = f"Security Error: {e}"
-            st.session_state.notebook_cells[cell_idx]['result'] = None
-            return
-
-        output_buffer = io.StringIO()
-        result_obj = None
-
-        # Get fresh scope
-        exec_scope = get_execution_scope()
-
-        try:
-            with contextlib.redirect_stdout(output_buffer):
-                # Parse code to handle last expression
-                try:
-                    tree = ast.parse(code)
-                except SyntaxError:
-                    # If syntax error, just let exec fail
-                    exec(code, exec_scope)
-                    tree = None
-
-                if tree and tree.body:
-                    last_node = tree.body[-1]
-                    if isinstance(last_node, ast.Expr):
-                        # Compile and exec everything before the last expression
-                        if len(tree.body) > 1:
-                            module = ast.Module(body=tree.body[:-1], type_ignores=[])
-                            exec(compile(module, filename="<string>", mode="exec"), exec_scope)
-
-                        # Eval the last expression
-                        expr = ast.Expression(body=last_node.value)
-                        result_obj = eval(compile(expr, filename="<string>", mode="eval"), exec_scope)
-                    else:
-                        # No expression at end, just exec all
-                        exec(code, exec_scope)
-                elif tree is None:
-                    pass # Already executed in except block
-                else:
-                    # Empty code
-                    pass
-
-            # Persist changes back to session state
-            update_persistent_scope(exec_scope)
-
-            st.session_state.notebook_cells[cell_idx]['output'] = output_buffer.getvalue()
-            st.session_state.notebook_cells[cell_idx]['result'] = result_obj
-
-        except Exception as e:
-            # Catch all exceptions to prevent app crash
-            st.session_state.notebook_cells[cell_idx]['output'] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-            st.session_state.notebook_cells[cell_idx]['result'] = None
+        # Send to Bridge
+        st.session_state.notebook_cells[cell_idx]['output'] = "Running..."
+        st.session_state.notebook_cells[cell_idx]['result'] = None
+        st.session_state.bridge_command = {
+            "command": "execute_code",
+            "payload": {"code": code, "id": cell['id']},
+            "id": str(uuid.uuid4())
+        }
 
     elif cell_type == 'sql':
-        try:
-            # Connect to DuckDB
-            con = duckdb.connect()
-
-            # Get Python Scope
-            exec_scope = get_execution_scope()
-
-            # Register all DataFrames and Series found in the scope
-            for var_name, var_val in exec_scope.items():
-                if isinstance(var_val, pd.DataFrame):
-                    try:
-                        con.register(var_name, var_val)
-                        # Also register 'data' if it's the main df
-                        if var_name == 'df':
-                            con.register('data', var_val)
-                    except Exception:
-                        pass # Ignore registration errors
-                elif isinstance(var_val, pd.Series):
-                    try:
-                        # DuckDB requires DataFrame for registration
-                        con.register(var_name, var_val.to_frame())
-                    except Exception:
-                        pass # Ignore registration errors
-
-            try:
-                # Execute Query and return as DataFrame
-                result_df = con.execute(code).df()
-
-                # Save result to Python scope
-                st.session_state.notebook_scope['last_sql_result'] = result_df
-
-                st.session_state.notebook_cells[cell_idx]['result'] = result_df
-                st.session_state.notebook_cells[cell_idx]['output'] = ""
-            except Exception as e:
-                st.session_state.notebook_cells[cell_idx]['output'] = f"SQL Error: {e}"
-                st.session_state.notebook_cells[cell_idx]['result'] = None
-        except Exception as e:
-             st.session_state.notebook_cells[cell_idx]['output'] = f"Error: {e}"
+        # Send to Bridge
+        st.session_state.notebook_cells[cell_idx]['output'] = "Running..."
+        st.session_state.notebook_cells[cell_idx]['result'] = None
+        st.session_state.bridge_command = {
+            "command": "execute_sql",
+            "payload": {"code": code, "id": cell['id']},
+            "id": str(uuid.uuid4())
+        }
 
 def add_cell(cell_type, index=None):
     new_id = str(uuid.uuid4())
@@ -708,6 +665,15 @@ def render_loading_screen(placeholder):
         # Put data in global session state and scope
         st.session_state['project_data'] = df
         init_notebook_state()
+
+        # Trigger Bridge Init with Data
+        # We need to serialize df to JSON for the bridge
+        json_data = df.to_json(orient='split', date_format='iso')
+        st.session_state.bridge_command = {
+            "command": "init_data",
+            "payload": json_data,
+            "id": str(uuid.uuid4())
+        }
 
         # Initialize chat
         st.session_state.messages = [{
@@ -1245,6 +1211,7 @@ def render_workspace():
 
     # --- Floating Chat ---
     render_floating_chat()
+
 
 # --- Main App Logic ---
 
