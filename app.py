@@ -106,8 +106,8 @@ st.markdown("""
         height: 80px;
     }
 
-    /* Shared Logic for Layers (Main and Glow) */
-    .loader .loader-layer {
+    /* The Rotating Container (The Window/Mask) */
+    .loader .spinner {
         position: absolute;
         inset: 0;
         animation: spin 1.2s linear infinite;
@@ -115,22 +115,14 @@ st.markdown("""
         /* The Comet Tail Mask */
         mask: conic-gradient(from 0deg, transparent 50%, black 100%);
         -webkit-mask: conic-gradient(from 0deg, transparent 50%, black 100%);
-    }
 
-    /* The Glow Layer (Behind) */
-    .loader .loader-layer.glow {
-        filter: blur(12px);
-        opacity: 0.8;
-        z-index: 0;
-    }
-
-    /* The Main Layer (Front) */
-    .loader .loader-layer.main {
-        z-index: 1;
+        /* GLOW: Intense Drop Shadow */
+        /* Note: Using drop-shadow without color inherits the pixel color */
+        filter: drop-shadow(0 0 4px) drop-shadow(0 0 10px);
     }
 
     /* The Static Color Ring (Counter-Rotating) */
-    .loader .loader-layer .ring {
+    .loader .spinner .ring {
         position: absolute;
         inset: 0;
         border-radius: 50%;
@@ -155,7 +147,7 @@ st.markdown("""
     }
 
     /* The Round Cap (Rotating with Window) */
-    .loader .loader-layer .cap {
+    .loader .spinner .cap {
         position: absolute;
         top: 0;
         left: 50%;
@@ -167,7 +159,7 @@ st.markdown("""
     }
 
     /* The Cap's Inner Gradient (Counter-Rotating) */
-    .loader .loader-layer .cap .cap-inner {
+    .loader .spinner .cap .cap-inner {
         position: absolute;
         width: 80px; /* Size of parent loader */
         height: 80px;
@@ -508,11 +500,7 @@ def render_loading_screen(placeholder):
         placeholder.markdown('''
             <div class="loading-container">
                 <div class="loader">
-                    <div class="loader-layer glow">
-                        <div class="ring"></div>
-                        <div class="cap"><div class="cap-inner"></div></div>
-                    </div>
-                    <div class="loader-layer main">
+                    <div class="spinner">
                         <div class="ring"></div>
                         <div class="cap"><div class="cap-inner"></div></div>
                     </div>
@@ -547,11 +535,7 @@ def render_loading_screen(placeholder):
                 placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader">
-                            <div class="loader-layer glow">
-                                <div class="ring"></div>
-                                <div class="cap"><div class="cap-inner"></div></div>
-                            </div>
-                            <div class="loader-layer main">
+                            <div class="spinner">
                                 <div class="ring"></div>
                                 <div class="cap"><div class="cap-inner"></div></div>
                             </div>
@@ -565,11 +549,7 @@ def render_loading_screen(placeholder):
                 placeholder.markdown(f'''
                     <div class="loading-container">
                         <div class="loader">
-                            <div class="loader-layer glow">
-                                <div class="ring"></div>
-                                <div class="cap"><div class="cap-inner"></div></div>
-                            </div>
-                            <div class="loader-layer main">
+                            <div class="spinner">
                                 <div class="ring"></div>
                                 <div class="cap"><div class="cap-inner"></div></div>
                             </div>
@@ -598,11 +578,7 @@ def render_loading_screen(placeholder):
                 placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader">
-                            <div class="loader-layer glow">
-                                <div class="ring"></div>
-                                <div class="cap"><div class="cap-inner"></div></div>
-                            </div>
-                            <div class="loader-layer main">
+                            <div class="spinner">
                                 <div class="ring"></div>
                                 <div class="cap"><div class="cap-inner"></div></div>
                             </div>
@@ -616,11 +592,7 @@ def render_loading_screen(placeholder):
                 placeholder.markdown('''
                     <div class="loading-container">
                         <div class="loader">
-                            <div class="loader-layer glow">
-                                <div class="ring"></div>
-                                <div class="cap"><div class="cap-inner"></div></div>
-                            </div>
-                            <div class="loader-layer main">
+                            <div class="spinner">
                                 <div class="ring"></div>
                                 <div class="cap"><div class="cap-inner"></div></div>
                             </div>
@@ -640,11 +612,7 @@ def render_loading_screen(placeholder):
             placeholder.markdown('''
                 <div class="loading-container">
                     <div class="loader">
-                        <div class="loader-layer glow">
-                            <div class="ring"></div>
-                            <div class="cap"><div class="cap-inner"></div></div>
-                        </div>
-                        <div class="loader-layer main">
+                        <div class="spinner">
                             <div class="ring"></div>
                             <div class="cap"><div class="cap-inner"></div></div>
                         </div>
