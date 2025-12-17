@@ -126,15 +126,21 @@ def handle_bridge_response(response):
 # We use a persistent key so the iframe doesn't reload.
 # Only render if we are in a project or generating one to prevent landing page errors.
 if st.session_state.project is not None or st.session_state.generation_phase == 'generating':
-    cmd = st.session_state.get('bridge_command')
-    bridge_response = execution_bridge(
-        command=cmd['command'] if cmd else None,
-        payload=cmd['payload'] if cmd else None,
-        key="persistent_bridge"
-    )
+    # Use a container and float it off-screen to prevent visual artifacts (the grey bar)
+    # display:none might stop script execution in some browsers, so we use visibility/position hacks.
+    bridge_container = st.container()
+    with bridge_container:
+        cmd = st.session_state.get('bridge_command')
+        bridge_response = execution_bridge(
+            command=cmd['command'] if cmd else None,
+            payload=cmd['payload'] if cmd else None,
+            key="persistent_bridge"
+        )
+        # Handle Bridge Response inside the container loop to capture value
+        handle_bridge_response(bridge_response)
 
-    # Handle Bridge Response
-    handle_bridge_response(bridge_response)
+    # Float the container off-screen
+    bridge_container.float("position: fixed; top: -1000px; left: -1000px; width: 0; height: 0; overflow: hidden;")
 
 # --- Custom CSS for Layout ---
 st.markdown("""

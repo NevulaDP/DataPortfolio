@@ -1,13 +1,14 @@
 import os
 import streamlit.components.v1 as components
+from pathlib import Path
 
 # Create a _release component
-# In development, we can point to a dev server, but for this task we will point to the static HTML we just created.
-# Since Streamlit Components require serving static files, we declare the path.
+# Point to the static HTML
+frontend_dir = (Path(__file__).parent / "frontend").absolute()
 
 _component_func = components.declare_component(
-    "execution_bridge",
-    path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+    "execution_bridge_v2",
+    path=str(frontend_dir)
 )
 
 def execution_bridge(command=None, payload=None, key=None):
