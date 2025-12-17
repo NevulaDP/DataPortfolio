@@ -59,6 +59,8 @@ if 'bridge_command' not in st.session_state:
     st.session_state.bridge_command = None # {command: "...", payload: "...", id: "..."}
 if 'bridge_ready' not in st.session_state:
     st.session_state.bridge_ready = False
+if 'last_processed_msg_id' not in st.session_state:
+    st.session_state.last_processed_msg_id = None
 
 # Initialize LLM Service (stateless)
 llm_service = LLMService()
@@ -70,6 +72,12 @@ verifier_service = VerifierService()
 def handle_bridge_response(response):
     if not response:
         return
+
+    # Deduplication
+    msg_id = response.get("messageId")
+    if msg_id and msg_id == st.session_state.last_processed_msg_id:
+        return
+    st.session_state.last_processed_msg_id = msg_id
 
     type = response.get("type")
 
@@ -83,6 +91,7 @@ def handle_bridge_response(response):
                 "payload": json_data,
                 "id": str(uuid.uuid4())
             }
+             st.rerun()
 
     elif type == "data_loaded":
         st.session_state["data_synced_to_bridge"] = True
@@ -93,6 +102,11 @@ def handle_bridge_response(response):
                 st.session_state.notebook_scope = json.loads(response["scope"])
             except Exception as e:
                 print(f"Error parsing scope: {e}")
+
+        # Clear init command if it was set
+        if st.session_state.bridge_command and st.session_state.bridge_command.get('command') == 'init_data':
+            st.session_state.bridge_command = None
+            st.rerun()
 
     elif type == "execution_result":
         cell_id = response.get("cellId")
@@ -133,6 +147,7 @@ def handle_bridge_response(response):
 
         # Clear command after processing
         st.session_state.bridge_command = None
+        st.rerun()
 
 
 # Render Bridge (Invisible)
@@ -153,8 +168,8 @@ if st.session_state.project is not None or st.session_state.generation_phase == 
         # Handle Bridge Response inside the container loop to capture value
         handle_bridge_response(bridge_response)
 
-    # Float the container off-screen
-    bridge_container.float("position: fixed; top: -1000px; left: -1000px; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none;")
+    # Float the container (hidden but in viewport to prevent throttling)
+    bridge_container.float("position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; z-index: -1;")
 
 # --- Custom CSS for Layout ---
 st.markdown("""

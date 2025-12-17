@@ -14,6 +14,8 @@
         // --- Streamlit Component Communication ---
 
         function sendMessageToStreamlit(data) {
+            // Add unique message ID
+            data.messageId = Date.now().toString() + "_" + Math.random().toString(36).substr(2, 9);
             window.parent.postMessage({
                 isStreamlitMessage: true,
                 type: "streamlit:setComponentValue",
@@ -42,7 +44,12 @@
         let isReady = false;
 
         async function ensureReady() {
+            let start = Date.now();
             while (!isReady) {
+                if (Date.now() - start > 10000) {
+                     console.warn("Waiting for Pyodide is taking longer than 10s...");
+                     start = Date.now(); // Reset warning timer
+                }
                 await new Promise(r => setTimeout(r, 100));
             }
         }
@@ -229,11 +236,10 @@
                         is_dataframe: true
                     });
                 } else {
-                     let err = pyodide.runPython("str(e) if 'e' in locals() else 'Unknown SQL Error'");
                      sendMessageToStreamlit({
                         type: "execution_result",
                         cellId: cellId,
-                        output: err,
+                        output: sqlError || "Unknown SQL Error",
                         success: false
                     });
                 }
