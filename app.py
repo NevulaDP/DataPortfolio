@@ -284,7 +284,8 @@ components.html("""
 # --- Functions ---
 
 def load_session_callback():
-    uploaded_file = st.session_state.get('session_uploader')
+    # Check both keys (sidebar legacy vs dialog)
+    uploaded_file = st.session_state.get('session_uploader') or st.session_state.get('session_uploader_dialog')
     if uploaded_file is not None:
         try:
             # Read string content
@@ -730,6 +731,17 @@ def toggle_edit_mode(cell_id):
     current_state = st.session_state.cell_edit_state.get(cell_id, True)
     st.session_state.cell_edit_state[cell_id] = not current_state
 
+@st.dialog("Load Session")
+def open_load_session_dialog():
+    st.markdown("Upload a previously saved `.json` session file to restore your project.")
+    st.file_uploader(
+        "Upload session file",
+        type=["json"],
+        key="session_uploader_dialog",
+        on_change=load_session_callback,
+        label_visibility="collapsed"
+    )
+
 def send_chat_message():
     """Callback to send chat message and clear input."""
     if st.session_state.chat_input_text:
@@ -1111,15 +1123,8 @@ def render_sidebar():
         st.divider()
 
         # Load Session (Always available)
-        with st.expander("📂 Load Session", expanded=False):
-            st.markdown("Upload a previously saved `.json` session file.")
-            st.file_uploader(
-                "Upload session file",
-                type=["json"],
-                key="session_uploader",
-                on_change=load_session_callback,
-                label_visibility="collapsed"
-            )
+        if st.button("📂 Load Session", use_container_width=True):
+            open_load_session_dialog()
 
         # Save Session (Only in Workspace)
         if st.session_state.project is not None:
