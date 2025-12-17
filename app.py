@@ -238,7 +238,7 @@ st.markdown("""
 
     /* Buttons: Gradient Styling (Default / Dark Mode) */
     div.stButton > button {
-        background: linear-gradient(90deg, var(--loader-c2) 0%, var(--loader-c3) 100%);
+        background: linear-gradient(90deg, var(--loader-c4) 0%, var(--loader-c5) 100%);
         color: white !important;
         border: none;
         padding: 0.5rem 0.75rem;
@@ -249,7 +249,7 @@ st.markdown("""
     }
 
     div.stButton > button:hover {
-        box-shadow: 0 0 12px var(--loader-c3); /* Glow effect */
+        box-shadow: 0 0 12px var(--loader-c5); /* Glow effect */
         color: white !important;
     }
 
