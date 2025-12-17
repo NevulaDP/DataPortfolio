@@ -113,8 +113,9 @@ st.markdown("""
         animation: spin 1.2s linear infinite;
 
         /* The Comet Tail Mask */
-        mask: conic-gradient(from 0deg, transparent 50%, black 100%);
-        -webkit-mask: conic-gradient(from 0deg, transparent 50%, black 100%);
+        /* Rotate mask slightly (15deg) to ensure the Cap (at 0deg) is not clipped by the start/end seam */
+        mask: conic-gradient(from 15deg, transparent 50%, black 100%);
+        -webkit-mask: conic-gradient(from 15deg, transparent 50%, black 100%);
     }
 
     /* Shared Ring Styles (Static Colors, Counter-Rotating) */
@@ -165,7 +166,7 @@ st.markdown("""
     }
 
     .loader .spinner .cap.glow {
-        filter: blur(4px);
+        filter: blur(8px);
         opacity: 0.8;
         z-index: 3;
     }
