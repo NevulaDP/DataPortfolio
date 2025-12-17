@@ -1111,14 +1111,15 @@ def render_sidebar():
         st.divider()
 
         # Load Session (Always available)
-        st.subheader("Load Session")
-        st.file_uploader(
-            "Upload session file (.json)",
-            type=["json"],
-            key="session_uploader",
-            on_change=load_session_callback,
-            label_visibility="collapsed"
-        )
+        with st.expander("📂 Load Session", expanded=False):
+            st.markdown("Upload a previously saved `.json` session file.")
+            st.file_uploader(
+                "Upload session file",
+                type=["json"],
+                key="session_uploader",
+                on_change=load_session_callback,
+                label_visibility="collapsed"
+            )
 
         # Save Session (Only in Workspace)
         if st.session_state.project is not None:
