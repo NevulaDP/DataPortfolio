@@ -388,11 +388,6 @@ st.markdown("""
         overflow: hidden !important;
     }
 
-    /* Chat Messages */
-    div[data-testid="stChatMessage"] {
-        border-radius: 24px !important;
-    }
-
     /* Selectboxes / Dropdowns */
     div[data-baseweb="select"] > div {
         border-radius: 24px !important;
