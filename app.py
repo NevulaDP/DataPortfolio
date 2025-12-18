@@ -335,12 +335,6 @@ st.markdown("""
 
     /* --- Global Rounded Edges ("Everything") --- */
 
-    /* Containers with borders (Code cells, etc.) */
-    div[data-testid="stVerticalBlock"] {
-        border-radius: 24px !important;
-        overflow: hidden; /* Ensure content is clipped */
-    }
-
     /* Code Editors (iframe) */
     iframe[title="code_editor.code_editor"] {
         border-radius: 24px !important;
