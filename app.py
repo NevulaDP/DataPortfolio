@@ -404,7 +404,7 @@ st.markdown("""
         border: none !important;
         border-radius: 24px !important;
         box-shadow: none !important; /* Remove shadow if any */
-        background-color: transparent !important; /* Make it blend in */
+        background-color: rgba(255, 255, 255, 0.05) !important; /* Subtle contrast */
     }
 
     /* Popover Content (Attempt to style) */
@@ -426,6 +426,10 @@ st.markdown("""
     body.st-theme-light details,
     body.st-theme-light div[data-testid="stDataFrame"] {
         border: 1px solid #ddd;
+    }
+
+    body.st-theme-light div[data-testid="stPopover"] button {
+        background-color: rgba(0, 0, 0, 0.05) !important;
     }
 
     .instruction-step {
