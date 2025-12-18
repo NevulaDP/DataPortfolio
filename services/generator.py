@@ -153,6 +153,7 @@ class ProjectGenerator:
            - Types Allowed: 'categorical', 'date', 'numeric', 'id', 'text'.
            - **CRITICAL RULE:** For 'categorical' columns, you **MUST** provide a list of valid options.
            - **CRITICAL RULE:** Use 'categorical' for ANY column with a finite set of values (Status, Region, Department, Priority, etc.).
+           - **CRITICAL RULE:** For 'numeric' columns, use ONLY 'min' and 'max'. Do **NOT** provide 'options' or 'faker_method'.
            - Use 'id' only for high-cardinality unique identifiers (UUIDs).
            - Use 'text' only for names, emails, addresses, or free text notes.
         3. **Relationships:** Ensure date logic is consistent (e.g., shipped after ordered).
@@ -429,7 +430,7 @@ class ProjectGenerator:
 
         return chaos.apply_chaos(df, col_types)
 
-    def generate_dataset(self, recipe: dict, rows: int = 10000) -> pd.DataFrame:
+    def generate_dataset(self, recipe: dict, rows: int = 10000, apply_simulation_chaos: bool = True) -> pd.DataFrame:
         data = {}
 
         # New "Schema-First" Architecture
@@ -458,7 +459,8 @@ class ProjectGenerator:
 
             # PRIORITY CHECK: If options are explicitly provided, force categorical behavior
             # This handles cases where LLM says type="text" or "string" but provides options.
-            if col.get('options') and len(col['options']) > 0:
+            # EXCEPTION: If strictly defined as 'numeric', we ignore options to prevent string contamination.
+            if col.get('options') and len(col['options']) > 0 and col_type != 'numeric':
                 col_type = 'categorical'
 
             # --- Categorical & Anchor ---
@@ -538,9 +540,9 @@ class ProjectGenerator:
                         delta = (end_date - start_date).days
                         random_days = np.random.randint(0, delta + 1, size=rows)
                         base = pd.to_datetime(start_date)
-                        data[col_name] = (base + pd.to_timedelta(random_days, unit='D')).date
+                        data[col_name] = (base + pd.to_timedelta(random_days, unit='D'))
                     except:
-                        data[col_name] = [fake.date_this_year() for _ in range(rows)]
+                        data[col_name] = [pd.to_datetime(fake.date_this_year()) for _ in range(rows)]
 
         # Pass 2: Dependent Columns
         for col in pending_cols:
@@ -554,16 +556,26 @@ class ProjectGenerator:
                     max_off = col.get('offset_days_max', 30)
                     offsets = np.random.randint(min_off, max_off + 1, size=rows)
                     base_series = pd.to_datetime(pd.Series(data[dep_name]))
-                    data[col_name] = (base_series + pd.to_timedelta(offsets, unit='D')).dt.date
+                    data[col_name] = (base_series + pd.to_timedelta(offsets, unit='D'))
                 else:
                     # Fallback if dependency missing
-                    data[col_name] = [fake.date_this_year() for _ in range(rows)]
+                    data[col_name] = [pd.to_datetime(fake.date_this_year()) for _ in range(rows)]
 
         df = pd.DataFrame(data)
 
-        # 6. Inject Chaos
-        # We need to construct a type map for the chaos tool
+        # 6. Inject Chaos (Optional)
+        if apply_simulation_chaos:
+            df = self.apply_chaos_to_data(df, recipe)
+
+        return df
+
+    def apply_chaos_to_data(self, df: pd.DataFrame, recipe: dict) -> pd.DataFrame:
+        """
+        Applies chaos simulation to an existing dataframe based on the recipe schema.
+        Useful for applying chaos AFTER verification.
+        """
         col_types = {}
+        schema = recipe.get('schema_list', [])
 
         # New Schema Logic
         if schema:
@@ -574,27 +586,9 @@ class ProjectGenerator:
                 elif c_type == 'id': col_types[clean_name] = 'string'
                 else: col_types[clean_name] = c_type
         else:
-            # Legacy Logic
-            col_types = {anchor_name: 'categorical'}
+            # Legacy Logic (Simplified reconstruction if needed)
+            pass
 
-            for col in recipe.get('categorical_columns', []):
-                clean_name = self._sanitize_column_name(col['name'])
-                col_types[clean_name] = 'categorical'
-
-            for col in recipe.get('date_columns', []):
-                clean_name = self._sanitize_column_name(col['name'])
-                col_types[clean_name] = 'date'
-
-            for col in numeric_cols:
-                clean_name = self._sanitize_column_name(col['name'])
-                col_types[clean_name] = col.get('type', 'numeric')
-
-            for col in recipe.get('faker_columns', []):
-                clean_name = self._sanitize_column_name(col['name'])
-                col_types[clean_name] = 'string' # Default for faker
-
-        df = chaos.apply_chaos(df, col_types)
-
-        return df
+        return chaos.apply_chaos(df, col_types)
 
 project_generator = ProjectGenerator()
