@@ -336,10 +336,10 @@ st.markdown("""
     /* --- Global Rounded Edges ("Everything") --- */
 
     /* Containers with borders (Code cells, etc.) */
-    div[data-testid="stVerticalBlock"] {
+    div[data-testid="stVerticalBlock"]:has(.cell-marker) {
         border-radius: 24px !important;
         overflow: hidden; /* Ensure content is clipped */
-        padding: 1.5rem; /* Add padding to prevent content cropping at corners */
+        padding: 1.5rem !important; /* Add padding to prevent content cropping */
     }
 
     /* Code Editors (iframe) */
@@ -1133,6 +1133,9 @@ def render_notebook():
 
         # Determine container styling based on type
         with st.container(border=True):
+            # Inject marker for CSS targeting
+            st.markdown('<div class="cell-marker" style="display:none"></div>', unsafe_allow_html=True)
+
             # Top Bar: Label and Delete Button
             col_lbl, col_del = st.columns([1, 0.05])
             with col_del:
