@@ -329,8 +329,8 @@ st.markdown("""
     /* Target the outer container to ensure full rounding */
     div[data-baseweb="input"] {
         border-radius: 24px !important;
-        background-color: rgba(255, 255, 255, 0.05) !important;
-        border: none !important;
+        background-color: #1e1e1e !important;
+        border: 1px solid #333;
     }
 
     /* --- Global Rounded Edges ("Everything") --- */
@@ -340,8 +340,6 @@ st.markdown("""
         border-radius: 24px !important;
         overflow: hidden; /* Ensure content is clipped */
         padding: 1.5rem !important; /* Add padding to prevent content cropping */
-        border: none !important;
-        background-color: rgba(255, 255, 255, 0.05) !important;
     }
 
     /* Code Editors (iframe) */
@@ -357,8 +355,7 @@ st.markdown("""
     details {
         border-radius: 24px !important;
         overflow: hidden; /* Key for clipping internal content like tables */
-        border: none !important;
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     summary {
         border-radius: 24px !important;
@@ -384,8 +381,7 @@ st.markdown("""
     div[data-testid="stDataFrame"] {
         border-radius: 24px !important;
         overflow: hidden !important;
-        border: none !important;
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     /* Force inner container of dataframe to respect radius */
     div[data-testid="stDataFrame"] > div {
@@ -418,24 +414,18 @@ st.markdown("""
 
     /* Light Mode Overrides for Inputs/Containers */
     body.st-theme-light .stTextInput input {
-        background-color: transparent !important;
+        background-color: #f0f2f6;
         color: black;
     }
 
     body.st-theme-light div[data-baseweb="input"] {
-        background-color: rgba(0, 0, 0, 0.05) !important;
-        border: none !important;
+        background-color: #f0f2f6 !important;
+        border: 1px solid #ddd;
     }
 
     body.st-theme-light details,
     body.st-theme-light div[data-testid="stDataFrame"] {
-        border: none !important;
-        background-color: rgba(0, 0, 0, 0.05) !important;
-    }
-
-    body.st-theme-light div[data-testid="stVerticalBlock"]:has(.cell-marker) {
-        background-color: rgba(0, 0, 0, 0.05) !important;
-        border: none !important;
+        border: 1px solid #ddd;
     }
 
     body.st-theme-light div[data-testid="stPopover"] button {
