@@ -338,26 +338,47 @@ st.markdown("""
     /* Containers with borders (Code cells, etc.) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 24px !important;
+        overflow: hidden; /* Ensure content is clipped */
+    }
+
+    /* Code Editors (iframe) */
+    iframe[title="code_editor.code_editor"] {
+        border-radius: 24px !important;
+    }
+    /* Fallback for other iframes */
+    div.stElementContainer iframe {
+        border-radius: 24px !important;
     }
 
     /* Expanders */
     details {
         border-radius: 24px !important;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
+        overflow: hidden; /* Key for clipping internal content like tables */
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     summary {
         border-radius: 24px !important;
     }
+    /* Expander Content Wrapper */
+    details > div {
+        border-radius: 24px !important;
+        overflow: hidden;
+    }
     div[data-testid="stExpander"] {
         border-radius: 24px !important;
+        overflow: hidden;
     }
 
     /* Dataframes */
     div[data-testid="stDataFrame"] {
         border-radius: 24px !important;
-        overflow: hidden;
+        overflow: hidden !important;
         border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    /* Force inner container of dataframe to respect radius */
+    div[data-testid="stDataFrame"] > div {
+        border-radius: 24px !important;
+        overflow: hidden !important;
     }
 
     /* Chat Messages */
