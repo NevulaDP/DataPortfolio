@@ -319,14 +319,27 @@ st.markdown("""
 
     /* Style the input to look like the Gemini bar */
     .stTextInput input {
-        border-radius: 24px !important;
-        padding: 1.5rem 1.5rem !important;
+        padding: 1rem 1.5rem !important; /* Reduced top/bottom padding for better alignment */
+        line-height: 1.5 !important;
         font-size: 1.1rem !important;
         background-color: #1e1e1e; /* Dark gray */
+        color: white; /* Ensure text is visible */
+    }
+
+    /* Target the outer container to ensure full rounding */
+    div[data-baseweb="input"] {
+        border-radius: 24px !important;
+        background-color: #1e1e1e !important;
         border: 1px solid #333;
     }
+
     body.st-theme-light .stTextInput input {
         background-color: #f0f2f6;
+        color: black;
+    }
+
+    body.st-theme-light div[data-baseweb="input"] {
+        background-color: #f0f2f6 !important;
         border: 1px solid #ddd;
     }
 
@@ -1255,7 +1268,6 @@ def start_generation_callback():
 def trigger_quick_start(sector_name):
     st.session_state.sector_input = sector_name
     start_generation_callback()
-    st.rerun()
 
 def render_landing():
     # Centered Layout
@@ -1323,8 +1335,7 @@ def render_landing():
 
         for i, (label, value) in enumerate(quick_starts):
             with cols[i]:
-                if st.button(label, use_container_width=True):
-                    trigger_quick_start(value)
+                st.button(label, use_container_width=True, on_click=trigger_quick_start, args=(value,))
 
         # Instructions / Context
         st.markdown("---")
