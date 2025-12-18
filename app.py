@@ -399,6 +399,14 @@ st.markdown("""
         border-radius: 24px !important;
     }
 
+    /* Popover Button (Remove border, fix rounding) */
+    div[data-testid="stPopover"] button {
+        border: none !important;
+        border-radius: 24px !important;
+        box-shadow: none !important; /* Remove shadow if any */
+        background-color: transparent !important; /* Make it blend in */
+    }
+
     /* Popover Content (Attempt to style) */
     div[data-testid="stPopoverBody"] {
         border-radius: 24px !important;
