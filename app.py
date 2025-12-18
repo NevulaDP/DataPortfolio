@@ -360,7 +360,7 @@ st.markdown("""
 
 # Inject JS to detect theme based on computed background color
 import streamlit.components.v1 as components
-components.html("""
+components.html(r"""
 <script>
     function checkTheme() {
         try {
@@ -755,7 +755,7 @@ def render_loading_screen(placeholder):
                         <div class="loading-text">Generating Synthetic Data...</div>
                     </div>
                 ''', unsafe_allow_html=True)
-                df = project_generator.generate_dataset(definition, rows=10000)
+                df = project_generator.generate_dataset(definition, rows=10000, apply_simulation_chaos=False)
             elif 'recipe' in definition:
                 # Legacy fallback
                 placeholder.markdown('''
@@ -775,7 +775,7 @@ def render_loading_screen(placeholder):
                         <div class="loading-text">Generating Synthetic Data...</div>
                     </div>
                 ''', unsafe_allow_html=True)
-                df = project_generator.generate_dataset(definition['recipe'], rows=10000)
+                df = project_generator.generate_dataset(definition['recipe'], rows=10000, apply_simulation_chaos=False)
             else:
                 placeholder.empty()
                 st.session_state['generation_error'] = "Invalid recipe format received from AI."
@@ -812,6 +812,10 @@ def render_loading_screen(placeholder):
                 break # Success!
 
             current_try += 1
+
+        # Apply Chaos Simulation (Post-Verification)
+        # We ensure the dataset is messy for the user to clean, but only AFTER schema validation passed.
+        df = project_generator.apply_chaos_to_data(df, definition)
 
         # Clear Pulse
         placeholder.empty()
