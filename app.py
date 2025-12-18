@@ -1268,7 +1268,6 @@ def start_generation_callback():
 def trigger_quick_start(sector_name):
     st.session_state.sector_input = sector_name
     start_generation_callback()
-    st.rerun()
 
 def render_landing():
     # Centered Layout
@@ -1336,8 +1335,7 @@ def render_landing():
 
         for i, (label, value) in enumerate(quick_starts):
             with cols[i]:
-                if st.button(label, use_container_width=True):
-                    trigger_quick_start(value)
+                st.button(label, use_container_width=True, on_click=trigger_quick_start, args=(value,))
 
         # Instructions / Context
         st.markdown("---")
