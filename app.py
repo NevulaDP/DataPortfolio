@@ -319,7 +319,8 @@ st.markdown("""
 
     /* Style the input to look like the Gemini bar */
     .stTextInput input {
-        padding: 1.5rem 1.5rem !important;
+        padding: 1rem 1.5rem !important; /* Reduced top/bottom padding for better alignment */
+        line-height: 1.5 !important;
         font-size: 1.1rem !important;
         background-color: #1e1e1e; /* Dark gray */
         color: white; /* Ensure text is visible */
