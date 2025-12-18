@@ -319,14 +319,26 @@ st.markdown("""
 
     /* Style the input to look like the Gemini bar */
     .stTextInput input {
-        border-radius: 24px !important;
         padding: 1.5rem 1.5rem !important;
         font-size: 1.1rem !important;
         background-color: #1e1e1e; /* Dark gray */
+        color: white; /* Ensure text is visible */
+    }
+
+    /* Target the outer container to ensure full rounding */
+    div[data-baseweb="input"] {
+        border-radius: 24px !important;
+        background-color: #1e1e1e !important;
         border: 1px solid #333;
     }
+
     body.st-theme-light .stTextInput input {
         background-color: #f0f2f6;
+        color: black;
+    }
+
+    body.st-theme-light div[data-baseweb="input"] {
+        background-color: #f0f2f6 !important;
         border: 1px solid #ddd;
     }
 
