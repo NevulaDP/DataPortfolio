@@ -336,7 +336,7 @@ st.markdown("""
     /* --- Global Rounded Edges ("Everything") --- */
 
     /* Containers with borders (Code cells, etc.) */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
+    div[data-testid="stVerticalBlock"] {
         border-radius: 24px !important;
         overflow: hidden; /* Ensure content is clipped */
     }
@@ -359,9 +359,16 @@ st.markdown("""
     summary {
         border-radius: 24px !important;
     }
+    /* Expander Open State Fixes (Prevent floating header glitch) */
+    details[open] summary {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+    }
     /* Expander Content Wrapper */
     details > div {
-        border-radius: 24px !important;
+        border-bottom-left-radius: 24px !important;
+        border-bottom-right-radius: 24px !important;
         overflow: hidden;
     }
     div[data-testid="stExpander"] {
@@ -1111,7 +1118,7 @@ def render_floating_chat():
     # Positioned on the right side (independent of sidebar)
     # Uses 'canvas' background to ensure opacity and adaptation to system/browser theme
     # Raised bottom offset to clear Streamlit footer
-    chat_con.float("bottom: 5rem; right: 3rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 10px;")
+    chat_con.float("bottom: 5rem; right: 3rem; width: 400px; z-index: 99999; background-color: canvas !important; color: var(--text-color); border-radius: 24px;")
 
 
 @st.fragment
