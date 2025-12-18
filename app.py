@@ -333,6 +333,54 @@ st.markdown("""
         border: 1px solid #333;
     }
 
+    /* --- Global Rounded Edges ("Everything") --- */
+
+    /* Containers with borders (Code cells, etc.) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 24px !important;
+    }
+
+    /* Expanders */
+    details {
+        border-radius: 24px !important;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
+    }
+    summary {
+        border-radius: 24px !important;
+    }
+    div[data-testid="stExpander"] {
+        border-radius: 24px !important;
+    }
+
+    /* Dataframes */
+    div[data-testid="stDataFrame"] {
+        border-radius: 24px !important;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Chat Messages */
+    div[data-testid="stChatMessage"] {
+        border-radius: 24px !important;
+    }
+
+    /* Selectboxes / Dropdowns */
+    div[data-baseweb="select"] > div {
+        border-radius: 24px !important;
+    }
+
+    /* Text Areas */
+    div[data-baseweb="textarea"] {
+        border-radius: 24px !important;
+    }
+
+    /* Popover Content (Attempt to style) */
+    div[data-testid="stPopoverBody"] {
+        border-radius: 24px !important;
+    }
+
+    /* Light Mode Overrides for Inputs/Containers */
     body.st-theme-light .stTextInput input {
         background-color: #f0f2f6;
         color: black;
@@ -343,9 +391,14 @@ st.markdown("""
         border: 1px solid #ddd;
     }
 
+    body.st-theme-light details,
+    body.st-theme-light div[data-testid="stDataFrame"] {
+        border: 1px solid #ddd;
+    }
+
     .instruction-step {
         background: rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
+        border-radius: 24px; /* Updated to match */
         padding: 1rem;
         border: 1px solid rgba(255, 255, 255, 0.1);
         height: 100%;
@@ -1136,7 +1189,7 @@ def render_notebook():
                             "hasText": True,
                             "showWithIcon": True,
                             "commands": ["submit"],
-                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                            "style": {"bottom": "0.44rem", "right": "0.4rem", "borderRadius": "24px"}
                         }]
                     )
 
@@ -1186,7 +1239,7 @@ def render_notebook():
                             "hasText": True,
                             "showWithIcon": True,
                             "commands": ["submit"],
-                            "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                            "style": {"bottom": "0.44rem", "right": "0.4rem", "borderRadius": "24px"}
                         }]
                     )
 
