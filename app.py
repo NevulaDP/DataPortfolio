@@ -83,20 +83,137 @@ st.markdown("""
 
     /* CSS Variables for Colors (Default to Dark) */
     :root {
+        --bg-dark: #0e1117;
+        --bg-card: #151b2d;
         --loader-c1: #0F1864;
         --loader-c2: #271781;
         --loader-c3: #317295;
         --loader-c4: #F29B3B;
         --loader-c5: #FF8080;
+        --accent-orange: #ff6b4a; /* New Orange Accent */
     }
 
     /* Light Mode Overrides */
     body.st-theme-light {
+        --bg-dark: #ffffff;
+        --bg-card: #f0f2f6;
         --loader-c1: #1E30C2;
         --loader-c2: #4A33D6;
         --loader-c3: #3E94C0;
         --loader-c4: #F29B3B;
         --loader-c5: #FF8080;
+        --accent-orange: #ff6b4a;
+    }
+
+    /* MISSION HUB (Sidebar) Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #0b0f19; /* Deepest Navy */
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Mission Hub Header */
+    .mission-hub-header {
+        font-family: 'Source Sans Pro', sans-serif;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .mission-sub {
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.5);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Notebook/Explorer Toggle */
+    .nav-toggle-container {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Styled Radio/Toggle replacement (we'll use st.radio with label visibility collapsed but custom css if possible, or just buttons) */
+    /* Let's style the stRadio horizontal */
+    div[data-testid="stRadio"] > div {
+        display: flex;
+        gap: 0px;
+        background: #1e2536;
+        border-radius: 24px;
+        padding: 4px;
+        width: fit-content;
+    }
+
+    div[data-testid="stRadio"] label {
+        background: transparent;
+        border-radius: 20px;
+        padding: 0.4rem 1.2rem;
+        margin: 0;
+        border: none;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    /* Active State (Pseudo-selector based on DOM is hard in Streamlit, relying on default radio behavior but hiding the circle) */
+    div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {
+        display: none; /* Hide the radio circle */
+    }
+
+    div[data-testid="stRadio"] label[data-baseweb="radio"] {
+        background: transparent;
+    }
+
+    /* Cell Block Headers */
+    .cell-header {
+        background-color: #1e2536;
+        color: rgba(255,255,255,0.7);
+        padding: 0.4rem 1rem;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .cell-container {
+        background-color: #151b2d;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        border: 1px solid rgba(255,255,255,0.05);
+        overflow: hidden;
+    }
+
+    /* Remove default stVerticalBlock styling for these cells if needed */
+
+    /* Apply styles to the container that holds the cell-marker */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cell-marker) > div {
+        background-color: #151b2d;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Fallback for older Streamlit versions or different structure */
+    div[data-testid="stVerticalBlock"]:has(.cell-marker) {
+        background-color: #151b2d;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
     }
 
     /* Wrapper for the Loader */
@@ -1081,20 +1198,54 @@ def render_floating_chat():
 
     with chat_con:
         # Use an expander to allow collapsing/expanding
-        # Defaulting to expanded so the user sees it immediately
-        with st.expander("💬 Mentor Chat", expanded=True):
+        # Custom header to match the orange icon/text
+        with st.expander("✨ AI Mentor", expanded=True, icon="✨"):
+            # We inject some custom CSS for this specific container to ensure it looks like the card
+            st.markdown("""
+            <style>
+                div[data-testid="stExpander"] {
+                    background-color: #151b2d !important;
+                    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                }
+                div[data-testid="stExpander"] summary span {
+                    color: white !important;
+                    font-weight: 700 !important;
+                }
+                div[data-testid="stExpander"] summary svg {
+                    fill: #ff6b4a !important; /* Orange Icon */
+                    color: #ff6b4a !important;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+
             # Message History
             chat_container = st.container(height=300)
             for msg in st.session_state.messages:
-                chat_container.chat_message(msg["role"]).write(msg["content"])
+                # Custom avatar styling handled by Streamlit largely, but we can set avatar images if we had them.
+                # For now using standard icons but could upgrade to custom HTML if strictly needed.
+                if msg["role"] == "user":
+                    chat_container.chat_message("user").write(msg["content"])
+                else:
+                    # Using a specific emoji or icon for the assistant to match the "Bot" feel
+                    chat_container.chat_message("assistant", avatar="🤖").write(msg["content"])
 
             # Input Area
             # Using columns to place input and button side-by-side
             c_input, c_btn = st.columns([4, 1])
             with c_input:
-                st.text_input("Message", key="chat_input_text", label_visibility="collapsed")
+                st.text_input("Ask for help...", key="chat_input_text", label_visibility="collapsed")
             with c_btn:
-                st.button("Send", use_container_width=True, on_click=send_chat_message)
+                # We want this button to be orange
+                st.markdown("""
+                <style>
+                    div[data-testid="stColumn"] button {
+                        background: linear-gradient(90deg, #F29B3B, #FF8080) !important;
+                        border: none !important;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+                st.button("➤", use_container_width=True, on_click=send_chat_message)
 
             # Processing LLM logic
             if st.session_state.processing_chat:
@@ -1143,36 +1294,56 @@ def render_notebook():
         cell_key = f"cell_{cell['id']}"
         cell_id = cell['id']
 
-        # Determine container styling based on type
-        with st.container(border=True):
-            # Inject marker for CSS targeting
-            st.markdown('<div class="cell-marker" style="display:none"></div>', unsafe_allow_html=True)
+        # Apply custom styling wrapper (card look)
+        # Using a container with no border because we use CSS for the "card" effect on the inner content
+        with st.container():
 
-            # Top Bar: Label and Delete Button
-            col_lbl, col_del = st.columns([1, 0.05])
-            with col_del:
-                if st.button("🗑️", key=f"del_{cell_key}", help="Delete Cell"):
-                    delete_cell(idx)
+            # --- Header Block ---
+            if cell['type'] == 'markdown':
+                st.markdown(f'<div class="cell-header">📝 MARKDOWN BLOCK</div>', unsafe_allow_html=True)
+            elif cell['type'] == 'code':
+                st.markdown(f'<div class="cell-header">🐍 CODE BLOCK</div>', unsafe_allow_html=True)
+            elif cell['type'] == 'sql':
+                st.markdown(f'<div class="cell-header">🗄️ SQL BLOCK</div>', unsafe_allow_html=True)
 
-            with col_lbl:
+            # --- Cell Content (Card) ---
+            # We use a container that our CSS targets via a marker class or just relying on `st.container(border=False)` + global CSS?
+            # The CSS I added earlier targets `.cell-container`.
+            # Streamlit containers don't allow adding custom classes directly easily without hacks.
+            # But I added `div[data-testid="stVerticalBlock"]:has(.cell-marker)` styling in step 1.
+            # Let's Stick to that: use a container with a marker.
+
+            # We use a border=True container which wraps content in stVerticalBlockBorderWrapper
+            with st.container(border=True):
+                # Inject marker for CSS targeting.
+                # This marker will be INSIDE the container, allowing :has() to select the parent.
+                st.markdown('<div class="cell-marker" style="display:none"></div>', unsafe_allow_html=True)
+
+                # Top Bar: Actions (Delete / Toggle)
+                # We move controls inside the card or keep them floating?
+                # Prototype shows clean headers. Let's put controls in a small row at the top inside the card.
+
+                col_spacer, col_actions = st.columns([1, 0.2])
+                with col_actions:
+                    c_edit, c_del = st.columns(2)
+                    with c_del:
+                        if st.button("🗑️", key=f"del_{cell_key}", help="Delete Cell"):
+                            delete_cell(idx)
+
+                    with c_edit:
+                         if cell['type'] == 'markdown':
+                            is_editing = st.session_state.cell_edit_state.get(cell_id, True)
+                            if is_editing:
+                                if st.button("👁️", key=f"toggle_prev_{cell_key}", help="Preview"):
+                                    toggle_edit_mode(cell_id)
+                                    st.rerun()
+                            else:
+                                if st.button("✏️", key=f"toggle_edit_{cell_key}", help="Edit"):
+                                    toggle_edit_mode(cell_id)
+                                    st.rerun()
+
                 if cell['type'] == 'markdown':
-                    # Check Edit State
                     is_editing = st.session_state.cell_edit_state.get(cell_id, True)
-
-                    # Label + Toggle Button
-                    c_label, c_toggle = st.columns([0.9, 0.1])
-                    with c_label:
-                        st.caption("Text / Markdown")
-                    with c_toggle:
-                        if is_editing:
-                            if st.button("👁️", key=f"toggle_prev_{cell_key}", help="Preview"):
-                                toggle_edit_mode(cell_id)
-                                st.rerun()
-                        else:
-                            if st.button("✏️", key=f"toggle_edit_{cell_key}", help="Edit"):
-                                toggle_edit_mode(cell_id)
-                                st.rerun()
-
                     if is_editing:
                         # Rich Text Editor
                         content = st_quill(
@@ -1307,46 +1478,72 @@ def render_notebook():
 def render_sidebar():
     # Only render sidebar when in workspace mode
     if st.session_state.project is not None:
+        definition = st.session_state.project['definition']
         with st.sidebar:
             # Display Logo if present
             if os.path.exists("logo.png"):
-                # Center the logo using columns
-                _, col_logo, _ = st.columns([1, 1, 1])
-                with col_logo:
-                    st.image("logo.png", width=150)
-
-            st.title("Settings")
-            # API Key is also here for persistent access
-            st.text_input(
-                "Gemini API Key",
-                type="password",
-                help="Enter your Google Gemini API Key. It is used only for this session and not stored.",
-                key="api_key_sidebar",
-                value=st.session_state.api_key,
-                on_change=lambda: st.session_state.update({"api_key": st.session_state.api_key_sidebar})
-            )
-
-            if st.session_state.api_key:
-                st.success("API Key configured.")
+                st.image("logo.png", use_container_width=True)
             else:
-                st.warning("No API Key set. Using Mock Mode.")
+                st.markdown('<div class="mission-hub-header">MISSION HUB</div>', unsafe_allow_html=True)
+
+            # --- Settings Popover (Hidden but accessible) ---
+            with st.popover("⚙️ Settings", use_container_width=True):
+                st.text_input(
+                    "Gemini API Key",
+                    type="password",
+                    help="Enter your Google Gemini API Key. It is used only for this session and not stored.",
+                    key="api_key_sidebar",
+                    value=st.session_state.api_key,
+                    on_change=lambda: st.session_state.update({"api_key": st.session_state.api_key_sidebar})
+                )
+                if st.session_state.api_key:
+                    st.success("API Key configured.")
+                else:
+                    st.warning("No API Key set. Using Mock Mode.")
+
+            # --- Project Narrative ---
+            st.markdown('<div class="mission-sub">📄 THE NARRATIVE</div>', unsafe_allow_html=True)
+            st.subheader(definition['title'])
+            st.markdown(f"<div style='text-align: justify; font-size: 0.9rem; color: rgba(255,255,255,0.8);'>{definition['description']}</div>", unsafe_allow_html=True)
+
+            st.markdown('<div class="mission-sub">🎯 MISSION OBJECTIVES</div>', unsafe_allow_html=True)
+            for i, task in enumerate(definition['tasks']):
+                st.markdown(f"<div style='margin-bottom: 0.5rem; font-size: 0.9rem;'>{i+1}. {task}</div>", unsafe_allow_html=True)
 
             st.divider()
 
-            # Save Session (Only in Workspace)
-            st.subheader("Save Session")
+            # --- Export / Save ---
+            st.markdown('<div class="mission-sub">💾 EXPORT PORTFOLIO SESSION</div>', unsafe_allow_html=True)
+
+            # Download Session JSON
             try:
-                # Serialize current state
                 json_str = serialize_session(st.session_state)
                 st.download_button(
-                    "💾 Download Session",
+                    "💾 Save Workspace (.json)",
                     data=json_str,
                     file_name="analysis_session.json",
                     mime="application/json",
                     use_container_width=True
                 )
             except Exception as e:
-                st.error(f"Error preparing save: {e}")
+                st.error(f"Error: {e}")
+
+            # Download Report HTML
+            try:
+                 html_report = generate_html_report(
+                    definition['title'],
+                    definition['description'],
+                    st.session_state.notebook_cells
+                )
+                 st.download_button(
+                    "📄 Export Report (.html)",
+                    html_report,
+                    "project_report.html",
+                    "text/html",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 def start_generation_callback():
     if st.session_state.sector_input:
@@ -1464,90 +1661,80 @@ def render_landing():
         if 'generation_error' in st.session_state:
             st.error(st.session_state.pop('generation_error'))
 
-def render_workspace():
+def render_data_explorer():
     project = st.session_state.project
     definition = project['definition']
     df = st.session_state.get('project_data')
 
-    col_context, col_work = st.columns([1, 2], gap="large")
-
-    # --- Context (Left Column) ---
-    with col_context:
-        st.subheader(definition['title'])
-        st.markdown(f"<div style='text-align: justify; white-space: pre-wrap;'>{definition['description']}</div>", unsafe_allow_html=True)
-
-        st.divider()
-        st.caption(f"**Dataset Granularity:** {definition.get('dataset_granularity', 'Not specified')}")
-
-        with st.expander("Tasks", expanded=True):
-            for i, task in enumerate(definition['tasks']):
-                st.write(f"{i+1}. {task}")
-
-        with st.expander("Data Schema"):
-            schema = definition.get('display_schema', definition.get('schema', definition.get('schema_list', [])))
-            if schema:
-                # Prepare data for display
-                schema_data = []
-                for col in schema:
-                    schema_data.append({
-                        "Column": col['name'],
-                        "Type": col['type'],
-                        "Description": col.get('description', '')
-                    })
-
-                st.dataframe(
-                    schema_data,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Column": st.column_config.TextColumn("Column", width="small"),
-                        "Type": st.column_config.TextColumn("Type", width="small"),
-                        "Description": st.column_config.TextColumn("Description", width="large")
-                    }
-                )
-            else:
-                st.write("No schema information available.")
-
-    # --- Notebook (Right Column) ---
-    with col_work:
-        st.title("Workspace")
-
-        # Verification Alert has been hidden as per user request (logic still runs internally)
-        # ver_res = st.session_state.get('verification_result')
-        # ... (Hidden)
-
-        if df is not None:
-            # Data Preview
-            st.subheader("Data Preview")
-            st.dataframe(df.head(), use_container_width=True)
-
-            # Download
+    if df is not None:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+             st.subheader("Data Explorer")
+        with c2:
+             # Download
             csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, "project_data.csv", "text/csv", use_container_width=True)
 
-            c_d1, c_d2 = st.columns([1, 1])
-            with c_d1:
-                st.download_button("Download Data", csv, "project_data.csv", "text/csv", use_container_width=True)
-            with c_d2:
-                # Generate Report
-                html_report = generate_html_report(
-                    definition['title'],
-                    definition['description'],
-                    st.session_state.notebook_cells
-                )
-                st.download_button(
-                    "Download Report 📄",
-                    html_report,
-                    "project_report.html",
-                    "text/html",
-                    use_container_width=True,
-                    help="To include a chart in the report, ensure the figure object (e.g., `fig`) is the last line of the cell."
-                )
+        st.markdown("### Dataset Preview")
+        st.dataframe(df.head(50), use_container_width=True, height=400)
 
         st.divider()
+        st.markdown("### Schema Definition")
 
+        schema = definition.get('display_schema', definition.get('schema', definition.get('schema_list', [])))
+        if schema:
+            # Prepare data for display
+            schema_data = []
+            for col in schema:
+                schema_data.append({
+                    "Column": col['name'],
+                    "Type": col['type'],
+                    "Description": col.get('description', '')
+                })
+
+            st.dataframe(
+                schema_data,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Column": st.column_config.TextColumn("Column", width="small"),
+                    "Type": st.column_config.TextColumn("Type", width="small"),
+                    "Description": st.column_config.TextColumn("Description", width="large")
+                }
+            )
+        else:
+            st.write("No schema information available.")
+    else:
+        st.info("No dataset available.")
+
+def render_workspace():
+    # --- State Management for Tabs ---
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = "Notebook"
+
+    # --- Top Navigation Bar ---
+    # Using columns to create the pill-toggle effect
+    c_nav, c_spacer = st.columns([1, 3])
+    with c_nav:
+        # We use a radio button disguised as a tab switcher via CSS
+        st.session_state.active_tab = st.radio(
+            "Navigation",
+            ["Notebook", "Data Explorer"],
+            index=0 if st.session_state.active_tab == "Notebook" else 1,
+            label_visibility="collapsed",
+            horizontal=True,
+            key="nav_radio"
+        )
+
+    st.divider()
+
+    # --- Main Content Area ---
+    if st.session_state.active_tab == "Notebook":
         render_notebook()
+    else:
+        render_data_explorer()
 
-    # --- Floating Chat ---
+    # --- Floating Chat (Always present in workspace) ---
     render_floating_chat()
 
 # --- Main App Logic ---
