@@ -69,14 +69,13 @@ st.markdown("""
     /* --- CSS Variables (Theme System) --- */
     :root {
         /* Default Dark Theme (Deep Navy) */
-        --bg-app: #06090e; /* Very dark navy/black */
-        --bg-sidebar: #0b0f19; /* Slightly lighter navy */
-        --bg-card: #0d1117; /* Card background */
-        --bg-card-header: #161b22; /* Card header background */
+        --bg-app: #0e1117; /* Verified Deep Navy */
+        --bg-sidebar: #0e1117; /* Matches app bg */
+        --bg-card: #1a1c24; /* Verified Card bg */
+        --bg-card-header: #21262d; /* Slightly lighter than card */
 
         --text-primary: #ffffff;
         --text-secondary: #8b949e;
-        --text-accent: #58a6ff;
 
         --border-color: #30363d;
 
@@ -84,8 +83,7 @@ st.markdown("""
         --accent-pink: #ff8080;
         --accent-green: #238636;
 
-        --radius-large: 16px;
-        --radius-small: 6px;
+        --radius-large: 12px;
     }
 
     /* Light Mode Overrides */
@@ -94,13 +92,9 @@ st.markdown("""
         --bg-sidebar: #f6f8fa;
         --bg-card: #ffffff;
         --bg-card-header: #f6f8fa;
-
         --text-primary: #24292f;
         --text-secondary: #57606a;
-        --text-accent: #0969da;
-
         --border-color: #d0d7de;
-
         --accent-orange: #cf6615;
         --accent-pink: #cf222e;
         --accent-green: #1a7f37;
@@ -116,33 +110,37 @@ st.markdown("""
         border-right: 1px solid var(--border-color);
     }
 
-    /* --- Components Styling --- */
-
-    /* Buttons (Generic) */
-    .stButton button {
-        border-radius: var(--radius-large);
-        font-weight: 600;
+    /* Override Sidebar Title/Expander alignment */
+    section[data-testid="stSidebar"] div.stElementContainer {
+        color: var(--text-primary);
     }
 
-    /* Card Container */
-    .card-container {
+    /* Card/Container Styling */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: var(--bg-card);
         border: 1px solid var(--border-color);
         border-radius: var(--radius-large);
-        margin-bottom: 1.5rem;
+        padding: 0 !important; /* Reset padding to allow full-width header */
         overflow: hidden;
     }
 
-    .card-header {
-        background-color: var(--bg-card-header);
-        border-bottom: 1px solid var(--border-color);
-        padding: 0.5rem 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+       /* Fix padding issues inside the container */
     }
 
-    .card-header-title {
+    /* --- Block Header (Negative Margin Strategy) --- */
+    .block-header {
+        margin: 0;
+        padding: 0.75rem 1rem;
+        background-color: var(--bg-card-header);
+        border-bottom: 1px solid var(--border-color);
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .block-title {
         color: var(--text-secondary);
         font-size: 0.75rem;
         font-weight: 700;
@@ -153,22 +151,18 @@ st.markdown("""
         gap: 0.5rem;
     }
 
-    .card-body {
-        padding: 1rem;
-    }
-
-    /* MISSION HUB (Sidebar) Styling */
+    /* --- MISSION HUB (Sidebar) --- */
     .mission-hub-header {
         font-family: 'Source Sans Pro', sans-serif;
         font-weight: 800;
         letter-spacing: 1px;
         text-transform: uppercase;
         font-size: 1.2rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.2rem;
         color: var(--text-primary);
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
 
     .mission-scope {
@@ -177,9 +171,10 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 1px;
         margin-bottom: 2rem;
+        margin-left: 0.2rem;
     }
 
-    .mission-sub {
+    .mission-sub-orange {
         font-size: 0.7rem;
         color: var(--accent-orange);
         text-transform: uppercase;
@@ -187,109 +182,35 @@ st.markdown("""
         margin-top: 1.5rem;
         margin-bottom: 0.5rem;
         font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
     }
 
-    /* Top Navigation Bar */
-    .top-nav-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .nav-pill-container {
-        display: flex;
-        background-color: var(--bg-card-header);
-        border-radius: 20px;
-        padding: 4px;
-        border: 1px solid var(--border-color);
-    }
-
-    .nav-pill {
-        padding: 6px 16px;
-        border-radius: 16px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-    }
-
-    .nav-pill.active {
-        background-color: var(--border-color); /* Highlight color */
-        color: var(--text-primary);
-    }
-
-    .workspace-status {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-secondary);
+    .mission-sub-pink {
+        font-size: 0.7rem;
+        color: var(--accent-pink);
         text-transform: uppercase;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        letter-spacing: 1px;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
     }
 
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        background-color: var(--accent-green);
-        border-radius: 50%;
-        box-shadow: 0 0 5px var(--accent-green);
-    }
-
-    /* Enhanced Loader Styles (Preserved) */
-    .loading-container {
+    /* Sidebar Download Button Override */
+    section[data-testid="stSidebar"] button {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: none !important;
+        font-weight: 700 !important;
         display: flex;
-        flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 70vh;
-        width: 100%;
-    }
-    .loading-text {
-        margin-top: 30px;
-        font-size: 24px;
-        font-weight: 600;
-        color: var(--text-primary);
-        font-family: 'Source Sans Pro', sans-serif;
-        animation: pulse-text 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-text {
-        0% { opacity: 0.6; }
-        50% { opacity: 1; }
-        100% { opacity: 0.6; }
     }
 
-    /* Code Editor Overrides */
-    iframe[title="code_editor.code_editor"] {
-        border-radius: 0 0 var(--radius-large) var(--radius-large) !important;
-    }
-
-    /* --- Negative Margin Card Header Strategy --- */
-    .card-header-wrapper {
-        margin: -1rem -1rem 1rem -1rem;
-        padding: 0.75rem 1rem;
-        background-color: var(--bg-card-header);
-        border-bottom: 1px solid var(--border-color);
-        width: calc(100% + 2rem);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    /* --- Pill Navigation Styling (st.radio) --- */
+    /* --- Navigation Pills (st.radio) --- */
     div[data-testid="stRadio"] > div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
         gap: 0px;
-        background-color: var(--bg-card-header);
+        background-color: #000000; /* Darker than app bg */
         padding: 4px;
         border-radius: 24px;
         border: 1px solid var(--border-color);
@@ -303,28 +224,71 @@ st.markdown("""
         border-radius: 20px;
         margin: 0;
         transition: all 0.2s;
+        cursor: pointer;
     }
 
     div[data-testid="stRadio"] label p {
         font-weight: 600 !important;
-        font-size: 0.9rem !important;
+        font-size: 0.85rem !important;
         color: var(--text-secondary);
     }
 
     /* Active State Mocking */
     div[data-testid="stRadio"] label[data-checked="true"] {
-        background-color: var(--bg-app);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background-color: #1e222b;
         color: var(--text-primary) !important;
+        border: 1px solid var(--border-color);
     }
 
     div[data-testid="stRadio"] label[data-checked="true"] p {
         color: var(--text-primary) !important;
     }
 
-    /* Hide the default radio circles */
+    /* Hide circles */
     div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {
         display: none !important;
+    }
+
+    /* --- Play Button (Header Placement Hack) --- */
+    /* Force Green Play Button inside Cards */
+    div[data-testid="stVerticalBlockBorderWrapper"] button[kind="primary"] {
+        background-color: #238636 !important;
+        border-color: #238636 !important;
+        color: white !important;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        line-height: 0;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] button[kind="primary"]:hover {
+        background-color: #2ea043 !important;
+        border-color: #2ea043 !important;
+        box-shadow: 0 0 8px rgba(46, 160, 67, 0.4);
+    }
+
+    /* Invert Quill Editor for Dark Mode Integration */
+    iframe[title="streamlit_quill.st_quill"] {
+        filter: invert(1) hue-rotate(180deg);
+        border-radius: 0 0 var(--radius-large) var(--radius-large);
+    }
+
+    /* Loading Text Pulse */
+    .loading-text {
+        font-family: 'Source Sans Pro', sans-serif;
+        font-weight: 600;
+        animation: pulse-text 1.5s ease-in-out infinite;
+        color: var(--text-primary);
+    }
+    @keyframes pulse-text {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+    }
+
+    /* Code Editor rounded bottom only */
+    iframe[title="code_editor.code_editor"] {
+        border-radius: 0 0 var(--radius-large) var(--radius-large) !important;
     }
 
 </style>
@@ -747,85 +711,117 @@ def render_notebook():
 
         # Header Info
         if cell['type'] == 'markdown':
-            icon, title = "📝", "MARKDOWN BLOCK"
+            icon, title = "📄", "MARKDOWN BLOCK"
         elif cell['type'] == 'code':
-            icon, title = "🐍", "CODE BLOCK"
+            icon, title = ">_", "CODE BLOCK"
         else:
             icon, title = "🗄️", "SQL BLOCK"
 
-        # --- Card Structure using Negative Margins ---
+        # --- Card Structure ---
         with st.container(border=True):
-            # 1. Negative Margin Header
+            # --- Custom Header ---
+            # We use st.columns to overlay controls if needed, but primarily we rely on the negative margin HTML
+            # to paint the background. The play button for code cells is the trickiest part.
+
+            # Render Header Background & Text
             st.markdown(f'''
-                <div class="card-header-wrapper">
-                    <div class="card-header-title">{icon} {title}</div>
-                    <!-- Place for controls if we could put buttons here, but we can't easily -->
+                <div class="block-header">
+                    <div class="block-title"><span style="color: #8b949e; margin-right: 8px;">{icon}</span> {title}</div>
                 </div>
             ''', unsafe_allow_html=True)
 
-            # 2. Controls (Visual alignment below header)
-            # We move the delete button to be "floating" top right or just in a row below
-            # To make it look like it's in the header, we'd need more hacks.
-            # For now, we put it in a right-aligned row immediately below the header.
+            # --- Controls Overlay ---
+            # We place buttons *immediately* after the header.
+            # We use columns to position them to the right.
+            # We use marginTop to pull them UP into the header space.
 
-            c_spacer, c_actions = st.columns([1, 0.1])
-            with c_actions:
-               if st.button("🗑️", key=f"del_{cell_key}"):
-                   delete_cell(idx)
+            if cell['type'] == 'code':
+                c_head_space, c_run = st.columns([0.9, 0.1])
+                with c_run:
+                    # Floating Run Button
+                    # Using a container with negative margin to pull it up
+                    st.markdown("""
+                    <style>
+                    div[data-testid="column"]:has(button.run-btn) {
+                        margin-top: -3.5rem;
+                        z-index: 10;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
 
-            st.divider() # distinct separation
+                    # We can't easily add classes to st.button, but we can target the button inside this specific column structure
+                    # Hack: Use a unique emoji or label to target if needed, but 'Run' is standard.
+                    # We will rely on the CSS in the main block targeting "button" inside "div[data-testid='stVerticalBlockBorderWrapper']"
+                    # combined with the column positioning.
 
-            # Content
+                    if st.button("▶", key=f"run_{cell_key}", help="Run Cell", type="primary"):
+                         execute_cell(idx)
+                         st.rerun()
+
+            # For generic controls (Delete), we can put them in a small 'settings' dropdown or icon
+            # For now, let's keep delete separate or less intrusive
+            c_content_area = st.container()
+            with c_content_area:
+                 # Delete button in a subtle position if needed, or we rely on the "add cell" menu having a delete option?
+                 # Let's add a small delete button below the cell content or in a "footer" for now to clean up the header.
+                 pass
+
+            # --- Content Body ---
             if cell['type'] == 'markdown':
                 is_editing = st.session_state.cell_edit_state.get(cell['id'], True)
                 if is_editing:
                     st_quill(value=cell['content'], key=f"quill_{cell_key}")
-                    if st.button("Done", key=f"save_{cell_key}"):
-                        toggle_edit_mode(cell['id'])
-                        st.rerun()
+                    c_save, c_del = st.columns([0.1, 0.9])
+                    with c_save:
+                        if st.button("Done", key=f"save_{cell_key}"):
+                            toggle_edit_mode(cell['id'])
+                            st.rerun()
+                    with c_del:
+                         if st.button("🗑️", key=f"del_md_{cell_key}"):
+                            delete_cell(idx)
+
                 else:
+                    # Render Markdown
                     st.markdown(cell['content'], unsafe_allow_html=True)
-                    if st.button("Edit", key=f"edit_{cell_key}"):
-                        toggle_edit_mode(cell['id'])
-                        st.rerun()
+                    # Double click to edit? Streamlit doesn't support double click events easily.
+                    # We add a small 'Edit' button at bottom
+                    c_edit, c_del = st.columns([0.1, 0.9])
+                    with c_edit:
+                        if st.button("Edit", key=f"edit_{cell_key}"):
+                            toggle_edit_mode(cell['id'])
+                            st.rerun()
+                    with c_del:
+                        if st.button("🗑️", key=f"del_md_view_{cell_key}"):
+                            delete_cell(idx)
 
             elif cell['type'] == 'code':
-                # Custom Run Button Styling for CodeEditor
-                btn_css = """
-                background-color: #238636;
-                color: white;
-                border-radius: 50%;
-                width: 30px;
-                height: 30px;
-                padding: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                """
+                # Code Editor with internal buttons disabled (we use the header button)
                 response = code_editor(
                     cell['content'],
                     lang="python",
                     key=f"ce_{cell_key}",
-                    buttons=[{
-                        "name": "Run",
-                        "feather": "Play",
-                        "primary": True,
-                        "hasText": False,
-                        "style": {"backgroundColor": "#238636", "borderRadius": "50%", "width": "24px", "height": "24px", "padding": "4px", "color": "white", "top": "-35px", "right": "5px"}
-                        # Positioning hack to move button to header?
-                        # No, code editor buttons are inside the iframe.
-                        # We'll put it in the top right of the editor.
-                    }]
+                    buttons=[] # No internal buttons
                 )
-                if response['type'] == "submit" and response['text']:
+
+                # Check for edits
+                if response['type'] == "submit" and response['text'] != cell['content']:
                     st.session_state.notebook_cells[idx]['content'] = response['text']
-                    execute_cell(idx)
-                    st.rerun()
+                    # We don't auto-run on type, only on Play button or Ctrl+Enter (which code_editor supports via submit)
+
+                # If code_editor triggered submit (Ctrl+Enter), we run
+                if response['type'] == "submit" and not st.session_state.get(f"run_{cell_key}"):
+                     st.session_state.notebook_cells[idx]['content'] = response['text']
+                     execute_cell(idx)
+                     st.rerun()
 
                 if cell.get('output'):
-                    st.code(cell['output'])
+                    st.markdown(f"<div style='font-family: monospace; font-size: 0.8rem; background: #0d1117; padding: 10px; border-radius: 4px; border: 1px solid #30363d;'>{cell['output']}</div>", unsafe_allow_html=True)
                 if cell.get('result') is not None:
                     st.write(cell['result'])
+
+                # Delete control for code cell (footer)
+                if st.button("🗑️ Delete Block", key=f"del_code_{cell_key}"):
+                    delete_cell(idx)
 
         render_add_cell_controls(idx + 1)
 
@@ -833,23 +829,32 @@ def render_sidebar():
     if st.session_state.project:
         definition = st.session_state.project['definition']
         with st.sidebar:
-            st.markdown('<div class="mission-hub-header">MISSION HUB</div>', unsafe_allow_html=True)
-            st.markdown('<div class="mission-scope">ANALYTICAL SCOPE</div>', unsafe_allow_html=True)
+            # HTML Header for Mission Hub
+            st.markdown("""
+                <div class="mission-hub-header">
+                    <span style="background: #e25555; padding: 4px; border-radius: 4px; display: inline-flex;">
+                        🗄️
+                    </span>
+                    MISSION HUB
+                </div>
+                <div class="mission-scope">ANALYTICAL SCOPE</div>
+            """, unsafe_allow_html=True)
 
-            st.markdown('<div class="mission-sub">📄 THE NARRATIVE</div>', unsafe_allow_html=True)
-            st.subheader(definition.get('title', 'Project'))
-            st.markdown(definition.get('description', ''), unsafe_allow_html=True)
+            # Narrative Section
+            st.markdown('<div class="mission-sub-orange">📄 THE NARRATIVE</div>', unsafe_allow_html=True)
+            st.markdown(f"**{definition.get('title', 'Project')}**")
+            st.markdown(f"<div style='text-align: justify; font-size: 0.9rem; color: #8b949e;'>{definition.get('description', '')}</div>", unsafe_allow_html=True)
 
-            st.markdown('<div class="mission-sub">🎯 OBJECTIVES</div>', unsafe_allow_html=True)
+            # Objectives Section
+            st.markdown('<div class="mission-sub-pink">🎯 MISSION OBJECTIVES</div>', unsafe_allow_html=True)
+            tasks_html = ""
             for t in definition.get('tasks', []):
-                st.markdown(f"- {t}")
+                tasks_html += f"<li style='margin-bottom: 0.5rem; font-size: 0.9rem; color: #8b949e;'>{t}</li>"
+            st.markdown(f"<ul>{tasks_html}</ul>", unsafe_allow_html=True)
 
             st.divider()
-            # Push to bottom using spacer? Streamlit sidebar doesn't support flex spacer easily.
-            # We just place it at the end.
-            st.markdown('<div class="mission-sub">DATA ASSETS</div>', unsafe_allow_html=True)
 
-            # Serialize session for export
+            # Export Button
             try:
                 session_json = serialize_session({
                     'project': st.session_state.project,
@@ -858,8 +863,9 @@ def render_sidebar():
                     'generated_history': st.session_state.generated_history,
                     'project_data': st.session_state.project_data
                 })
+                # Using standard download button but styled via CSS (see CSS section)
                 st.download_button(
-                    label="Export Portfolio Session",
+                    label="📥 Export Portfolio Session",
                     data=session_json,
                     file_name=f"data_forge_session_{int(pd.Timestamp.now().timestamp())}.json",
                     mime="application/json",
@@ -876,20 +882,30 @@ def render_workspace():
     # Render Sidebar
     render_sidebar()
 
-    # Top Bar
-    c_nav, c_status = st.columns([1, 1])
+    # Top Bar - Navigation Pills
+    c_nav, c_status = st.columns([2, 1])
     with c_nav:
-        mode = st.radio("Mode", ["Notebook", "Data Explorer"], horizontal=True, label_visibility="collapsed", key="nav_radio")
-        st.session_state.active_tab = mode
+        # We use st.radio but styled as pills
+        mode = st.radio(
+            "Mode",
+            ["Notebook", "Data Explorer"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="nav_radio",
+            format_func=lambda x: f"💻 {x}" if x == "Notebook" else f"📊 {x}"
+        )
+        st.session_state.active_tab = "Notebook" if "Notebook" in mode else "Data Explorer"
 
     with c_status:
         st.markdown("""
-        <div style="text-align: right; margin-top: 5px;">
+        <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%; padding-top: 10px;">
             <span class="workspace-status"><span class="status-dot"></span> LOCAL KERNEL ACTIVE</span>
+            <span style="margin-left: 10px; font-size: 1.2rem;">🌑</span>
         </div>
         """, unsafe_allow_html=True)
 
-    st.divider()
+    # Spacing
+    st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
 
     if st.session_state.active_tab == "Notebook":
         render_notebook()
